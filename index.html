@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ml">
 <head>
@@ -17,49 +16,38 @@ button:disabled{opacity:.5}
 .hidden{display:none}
 h2{color:#49301f}
 small{color:#666}
+.order-row{padding:12px 0;border-bottom:1px solid #eee}
+.cancel-order{width:auto;display:block;background:#9c3026}
+.cancelled{display:block;color:#9c3026;font-weight:bold;margin-top:6px}
+#itemPhoto{display:block;width:96px;height:96px;object-fit:cover;border-radius:8px}
+#itemPhoto[hidden]{display:none}
 </style>
 </head>
 <body>
-<header>
-<h1>☕ STAR COFFEE</h1>
-<div>Owner & Staff App</div>
-</header>
+<header><h1>☕ STAR COFFEE</h1><div>Owner &amp; Staff App</div></header>
 <main>
 <section id="login" class="card">
 <h2>Login / ലോഗിൻ</h2>
-<select id="role">
-<option value="owner">Owner</option>
-<option value="staff">Staff</option>
-</select>
+<select id="role"><option value="owner">Owner</option><option value="staff">Staff</option></select>
 <input id="username" placeholder="Username">
 <input id="pin" type="password" inputmode="numeric" placeholder="PIN">
 <button onclick="login()">Login</button>
 <p id="error"></p>
 <small>Demo Owner: owner / 1234<br>Demo Staff: staff / 5678</small>
 </section>
-
 <section id="app" class="hidden">
 <div class="card">
 <h2 id="welcome"></h2>
 <button class="secondary" onclick="logout()">Logout</button>
 </div>
-
 <div class="card">
 <h2>🧾 New Order</h2>
-<select id="item">
-<option value="Tea" data-price="12">Tea ₹12</option>
-<option value="Coffee" data-price="20">Coffee ₹20</option>
-<option value="Black Coffee" data-price="15">Black Coffee ₹15</option>
-<option value="Snacks" data-price="20">Snacks ₹20</option>
-</select>
+<select id="item" aria-label="Menu item"></select>
+<img id="itemPhoto" alt="" hidden>
 <input id="qty" type="number" min="1" value="1" placeholder="Quantity">
-<select id="payment">
-<option>Cash</option>
-<option>UPI</option>
-</select>
+<select id="payment"><option>Cash</option><option>UPI</option></select>
 <button onclick="addOrder()">Save Order</button>
 </div>
-
 <div id="ownerPanel" class="hidden">
 <div class="card">
 <h2>📊 Business Dashboard</h2>
@@ -75,92 +63,266 @@ small{color:#666}
 <button onclick="addExpense()">Save Expense</button>
 </div>
 </div>
-
 <div class="card">
 <h2>Recent Orders</h2>
 <div id="orders"></div>
 </div>
+<form id="menuForm" class="card hidden">
+<h2>Menu / മെനു</h2>
+<label for="menuChoice">Item / ഇനം</label>
+<select id="menuChoice"></select>
+<label for="menuName">Name / പേര്</label>
+<input id="menuName" required maxlength="80">
+<label for="menuPrice">Price / വില (₹)</label>
+<input id="menuPrice" type="number" min="0.01" step="0.01" required>
+<label for="menuPhoto">Picture / ഫോട്ടോ</label>
+<input id="menuPhoto" type="file" accept="image/*">
+<button id="saveMenu">Save Menu Item / സേവ്</button>
+<p id="menuMessage" role="status"></p>
+</form>
 </section>
 </main>
 <script>
-const KEY="starCoffeeDemoV1";
-let currentRole="";
+const KEY = "starCoffeeDemoV1";
+const defaultMenu = [
+  {name: "Tea", price: 12}, {name: "Coffee", price: 20},
+  {name: "Black Coffee", price: 15}, {name: "Snacks", price: 20}
+];
+const el = id => document.getElementById(id);
+let currentRole = "";
 let data;
-try{
- data=JSON.parse(localStorage.getItem(KEY))||{};
-}catch(e){data={};}
-if(!Array.isArray(data.orders))data.orders=[];
-if(!Array.isArray(data.expenses))data.expenses=[];
-function save(){
- try{localStorage.setItem(KEY,JSON.stringify(data));}
- catch(e){alert("Could not save data");}
+
+function readData() {
+  let stored;
+  try {
+    stored = JSON.parse(localStorage.getItem(KEY)) || {};
+  } catch {
+    stored = {};
+  }
+  return {
+    ...stored,
+    orders: Array.isArray(stored.orders) ? stored.orders : [],
+    expenses: Array.isArray(stored.expenses) ? stored.expenses : [],
+    menu: Array.isArray(stored.menu) ? stored.menu : defaultMenu
+  };
 }
-function today(){
- const d=new Date();
- return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+
+function save(next) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(next));
+    data = next;
+    return true;
+  } catch {
+    alert("Could not save data");
+    return false;
+  }
 }
-function login(){
- const role=document.getElementById("role").value;
- const user=document.getElementById("username").value.trim();
- const pin=document.getElementById("pin").value;
- if((role==="owner"&&user==="owner"&&pin==="1234")||
- (role==="staff"&&user==="staff"&&pin==="5678")){
- currentRole=role;
- document.getElementById("login").classList.add("hidden");
- document.getElementById("app").classList.remove("hidden");
- document.getElementById("ownerPanel").classList.toggle("hidden",role!=="owner");
- document.getElementById("welcome").textContent=role==="owner"?"Owner Dashboard":"Staff Dashboard";
- render();
- }else{
- document.getElementById("error").textContent="Wrong username or PIN";
- }
+
+function today() {
+  const date = new Date();
+  return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") +
+    "-" + String(date.getDate()).padStart(2, "0");
 }
-function logout(){
- currentRole="";
- document.getElementById("app").classList.add("hidden");
- document.getElementById("login").classList.remove("hidden");
- document.getElementById("pin").value="";
+
+function login() {
+  const role = el("role").value;
+  const user = el("username").value.trim();
+  const pin = el("pin").value;
+  if (!((role === "owner" && user === "owner" && pin === "1234") ||
+        (role === "staff" && user === "staff" && pin === "5678"))) {
+    el("error").textContent = "Wrong username or PIN";
+    return;
+  }
+  currentRole = role;
+  data = readData();
+  el("error").textContent = "";
+  el("login").classList.add("hidden");
+  el("app").classList.remove("hidden");
+  el("ownerPanel").classList.toggle("hidden", role !== "owner");
+  el("menuForm").classList.toggle("hidden", role !== "owner");
+  el("welcome").textContent = role === "owner" ? "Owner Dashboard" : "Staff Dashboard";
+  renderMenu();
+  render();
 }
-function addOrder(){
- const sel=document.getElementById("item");
- const qty=Number(document.getElementById("qty").value);
- if(!Number.isInteger(qty)||qty<1){alert("Enter valid quantity");return;}
- const option=sel.options[sel.selectedIndex];
- data.orders.push({
- date:today(),item:sel.value,qty:qty,
- total:Number(option.dataset.price)*qty,
- payment:document.getElementById("payment").value
- });
- save();render();alert("Order saved");
+
+function logout() {
+  currentRole = "";
+  el("app").classList.add("hidden");
+  el("login").classList.remove("hidden");
+  el("pin").value = "";
 }
-function addExpense(){
- if(currentRole!=="owner")return;
- const name=document.getElementById("expenseName").value.trim();
- const amount=Number(document.getElementById("expenseAmount").value);
- if(!name||!Number.isFinite(amount)||amount<=0){
- alert("Enter valid expense");return;
- }
- data.expenses.push({date:today(),name:name,amount:amount});
- save();render();alert("Expense saved");
+
+function addOrder() {
+  if (!currentRole) return;
+  const qty = Number(el("qty").value);
+  if (!Number.isInteger(qty) || qty < 1) {
+    alert("Enter valid quantity");
+    return;
+  }
+  const item = data.menu[Number(el("item").value)];
+  const order = {
+    date: today(), item: item.name, qty,
+    total: Math.round(item.price * 100) * qty / 100, payment: el("payment").value
+  };
+  const latest = readData();
+  if (save({...latest, orders: [...latest.orders, order]})) {
+    render();
+    alert("Order saved");
+  }
 }
-function render(){
- const orders=data.orders.filter(x=>x.date===today());
- const expenses=data.expenses.filter(x=>x.date===today());
- const sales=orders.reduce((s,x)=>s+x.total,0);
- const costs=expenses.reduce((s,x)=>s+x.amount,0);
- document.getElementById("sales").textContent=sales.toFixed(2);
- document.getElementById("expenses").textContent=costs.toFixed(2);
- document.getElementById("profit").textContent=(sales-costs).toFixed(2);
- const box=document.getElementById("orders");
- box.replaceChildren();
- orders.slice(-10).reverse().forEach(o=>{
- const p=document.createElement("p");
- p.textContent=o.item+" × "+o.qty+" — ₹"+o.total+" ("+o.payment+")";
- box.appendChild(p);
- });
- if(!orders.length)box.textContent="No orders today";
+
+function addExpense() {
+  if (currentRole !== "owner") return;
+  const name = el("expenseName").value.trim();
+  const amount = Number(el("expenseAmount").value);
+  if (!name || !Number.isFinite(amount) || amount <= 0) {
+    alert("Enter valid expense");
+    return;
+  }
+  const latest = readData();
+  if (save({...latest, expenses: [...latest.expenses, {date: today(), name, amount}]})) {
+    render();
+    alert("Expense saved");
+  }
 }
+
+function orderLabel(order) {
+  return order.item + " × " + order.qty + " — ₹" + order.total + " (" + order.payment + ")";
+}
+
+function cancelOrder(index, order) {
+  if (currentRole !== "owner" || order.cancelledAt) return;
+  if (!confirm("Cancel this order?\n" + orderLabel(order))) return;
+  const latest = readData();
+  const savedOrder = latest.orders[index];
+  if (!savedOrder || JSON.stringify(savedOrder) !== JSON.stringify(order)) {
+    data = latest;
+    render();
+    alert("Orders changed. Please review the list.");
+    return;
+  }
+  latest.orders[index] = {...savedOrder, cancelledAt: new Date().toISOString()};
+  if (save(latest)) render();
+}
+
+function render() {
+  const date = today();
+  const sales = data.orders.reduce((sum, order) =>
+    sum + (order.date === date && !order.cancelledAt ? order.total : 0), 0);
+  const costs = data.expenses.filter(expense => expense.date === date)
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  el("sales").textContent = sales.toFixed(2);
+  el("expenses").textContent = costs.toFixed(2);
+  el("profit").textContent = (sales - costs).toFixed(2);
+
+  const box = el("orders");
+  box.replaceChildren();
+  const orders = data.orders.map((order, index) => ({order, index}))
+    .filter(({order}) => order.date === date).slice(-10).reverse();
+  for (const {order, index} of orders) {
+    const row = document.createElement("div");
+    row.className = "order-row";
+    row.textContent = orderLabel(order);
+    if (order.cancelledAt) {
+      const status = document.createElement("small");
+      status.className = "cancelled";
+      status.textContent = "Cancelled / റദ്ദാക്കി";
+      row.append(status);
+    } else if (currentRole === "owner") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "cancel-order";
+      button.textContent = "Cancel Order";
+      button.addEventListener("click", () => cancelOrder(index, order));
+      row.append(button);
+    }
+    box.append(row);
+  }
+  if (!orders.length) box.textContent = "No orders today";
+}
+
+function renderMenu() {
+  const selection = el("item").value;
+  el("item").replaceChildren(...data.menu.map((item, index) =>
+    new Option(item.name + " ₹" + item.price, index)));
+  if (selection !== "" && data.menu[Number(selection)]) el("item").value = selection;
+  el("menuChoice").replaceChildren(new Option("Add New Item / പുതിയ ഇനം", ""),
+    ...data.menu.map((item, index) => new Option(item.name, index)));
+  showItemPhoto();
+  editMenuItem();
+}
+
+function showItemPhoto() {
+  const item = data.menu[Number(el("item").value)];
+  const photo = el("itemPhoto");
+  photo.hidden = !item?.photo;
+  if (item?.photo) photo.src = item.photo;
+  else photo.removeAttribute("src");
+}
+
+function editMenuItem() {
+  const selection = el("menuChoice").value;
+  const item = selection === "" ? null : data.menu[Number(selection)];
+  el("menuName").value = item?.name ?? "";
+  el("menuPrice").value = item?.price ?? "";
+  el("menuPhoto").value = "";
+}
+
+async function resizePhoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const scale = Math.min(1, 360 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.75);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+el("item").addEventListener("change", showItemPhoto);
+el("menuChoice").addEventListener("change", editMenuItem);
+el("menuForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (currentRole !== "owner") return;
+  const name = el("menuName").value.trim();
+  const price = Number(el("menuPrice").value);
+  const selection = el("menuChoice").value;
+  const file = el("menuPhoto").files[0];
+  const message = el("menuMessage");
+  if (!name || !Number.isFinite(price) || price <= 0) {
+    message.textContent = "Enter a name and valid price.";
+    return;
+  }
+  const button = el("saveMenu");
+  button.disabled = true;
+  let photo;
+  try {
+    if (file) photo = await resizePhoto(file);
+    if (currentRole !== "owner") return;
+    const latest = readData();
+    const menu = latest.menu.slice();
+    const index = selection === "" ? menu.length : Number(selection);
+    menu[index] = {...menu[index], name, price};
+    if (photo) menu[index].photo = photo;
+    if (save({...latest, menu})) {
+      renderMenu();
+      message.textContent = "Menu item saved / സേവ് ചെയ്തു";
+    }
+  } catch {
+    message.textContent = "Could not open this picture. Try a JPEG or PNG.";
+  } finally {
+    button.disabled = false;
+  }
+});
 </script>
 </body>
-</html>
-
+</
