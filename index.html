@@ -128,7 +128,7 @@ function login() {
   const role = el("role").value;
   const user = el("username").value.trim();
   const pin = el("pin").value;
-  if (!((role === "owner" && user === "owner" && pin === "1234") ||
+  if (!((role === "owner" && user === "owner" && pin === "6069") ||
         (role === "staff" && user === "staff" && pin === "5678"))) {
     el("error").textContent = "Wrong username or PIN";
     return;
