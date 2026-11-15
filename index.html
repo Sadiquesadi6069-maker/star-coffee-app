@@ -1,1 +1,422 @@
-https://chatgpt.com/library/share/libfile_e9a582f8d61c819195084013e4438de5?account_id=personal
+
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Star Coffee App</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:#f5f2eb;margin:0;color:#29221d}
+header{background:#49301f;color:white;padding:22px;text-align:center}
+header h1{font-size:29px}
+main{max-width:560px;margin:auto;padding:15px}
+.card{background:white;border-radius:14px;padding:18px;margin:13px 0;box-shadow:0 2px 9px #ddd}
+input,select,button{width:100%;padding:13px;margin:7px 0;border-radius:9px;border:1px solid #ccc;font-size:16px}
+button{background:#49301f;color:white;border:0;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.5}
+.secondary{background:#777}
+.danger{background:#a83228}
+.hidden{display:none!important}
+h2{color:#49301f;font-size:22px}
+small{color:#666}
+.row{padding:12px 0;border-bottom:1px solid #ddd}
+.photo{width:100px;height:100px;object-fit:cover;border-radius:9px}
+.photo[hidden]{display:none}
+.stat{background:#f5f2eb;padding:12px;margin:8px 0;border-radius:9px}
+.error{color:#b3261e}
+.success{color:green}
+</style>
+</head>
+<body>
+<header>
+<h1>☕ STAR COFFEE</h1>
+<p>Owner & Staff App</p>
+</header>
+<main>
+
+<section id="loginPage" class="card">
+<h2>Login / ലോഗിൻ</h2>
+<select id="role">
+<option value="owner">Owner</option>
+<option value="staff">Staff</option>
+</select>
+<input id="username" placeholder="Username" autocomplete="username">
+<input id="pin" type="password" inputmode="numeric" placeholder="PIN">
+<button type="button" onclick="login()">Login</button>
+<p id="loginError" class="error"></p>
+<small>Demo Owner: owner / 6069</small>
+<br>
+<small>Demo Staff: staff / 5678</small>
+</section>
+
+<section id="appPage" class="hidden">
+
+<div class="card">
+<h2 id="welcome"></h2>
+<button class="secondary" onclick="logout()">Logout</button>
+</div>
+
+<div class="card">
+<h2>🧾 New Order</h2>
+<select id="orderItem" onchange="showPhoto()"></select>
+<img id="itemPhoto" class="photo" hidden alt="Product">
+<input id="quantity" type="number" min="1" value="1" placeholder="Quantity">
+<select id="payment">
+<option value="Cash">Cash</option>
+<option value="UPI">UPI</option>
+</select>
+<button onclick="addOrder()">Save Order</button>
+</div>
+
+<div id="ownerPanel" class="hidden">
+
+<div class="card">
+<h2>📊 Business Dashboard</h2>
+<div class="stat">Today Sales: ₹<b id="sales">0</b></div>
+<div class="stat">Today Expenses: ₹<b id="expenses">0</b></div>
+<div class="stat">Today Balance: ₹<b id="profit">0</b></div>
+<div class="stat">Month Sales: ₹<b id="monthSales">0</b></div>
+<div class="stat">Month Expenses: ₹<b id="monthExpenses">0</b></div>
+<div class="stat">Month Balance: ₹<b id="monthProfit">0</b></div>
+<small>Balance = Sales - recorded expenses. ഇത് യഥാർത്ഥ Net Profit ആയിരിക്കണമെന്നില്ല.</small>
+</div>
+
+<div class="card">
+<h2>💸 Add Expense</h2>
+<input id="expenseName" placeholder="Expense name">
+<input id="expenseAmount" type="number" min="0.01" step="0.01" placeholder="Amount ₹">
+<button onclick="addExpense()">Save Expense</button>
+</div>
+
+<div class="card">
+<h2>☕ Products & Prices</h2>
+<select id="menuChoice" onchange="editMenu()"></select>
+<input id="menuName" placeholder="Product name">
+<input id="menuPrice" type="number" min="0.01" step="0.01" placeholder="Price ₹">
+<label for="menuPhoto">Product Photo</label>
+<input id="menuPhoto" type="file" accept="image/*">
+<button id="menuSaveButton" onclick="saveMenu()">Save Product</button>
+<p id="menuMessage"></p>
+</div>
+
+</div>
+
+<div class="card">
+<h2>📋 Recent Orders</h2>
+<div id="orderList"></div>
+</div>
+
+</section>
+</main>
+
+<script>
+"use strict";
+
+const KEY="starCoffeeVersion2";
+const defaults=[
+{name:"Tea",price:12},
+{name:"Coffee",price:20},
+{name:"Black Coffee",price:15},
+{name:"Snacks",price:20}
+];
+
+const el=id=>document.getElementById(id);
+let currentRole="";
+let data=readData();
+
+function readData(){
+let stored={};
+try{
+stored=JSON.parse(localStorage.getItem(KEY))||{};
+}catch(e){}
+return{
+orders:Array.isArray(stored.orders)?stored.orders:[],
+expenses:Array.isArray(stored.expenses)?stored.expenses:[],
+menu:Array.isArray(stored.menu)?stored.menu:defaults.map(x=>({...x}))
+};
+}
+
+function saveData(){
+try{
+localStorage.setItem(KEY,JSON.stringify(data));
+return true;
+}catch(e){
+alert("Data save failed. Storage may be full.");
+return false;
+}
+}
+
+function dateKey(date=new Date()){
+return date.getFullYear()+"-"+
+String(date.getMonth()+1).padStart(2,"0")+"-"+
+String(date.getDate()).padStart(2,"0");
+}
+
+function money(n){
+return Number(n||0).toFixed(2);
+}
+
+function login(){
+const role=el("role").value;
+const username=el("username").value.trim();
+const pin=el("pin").value;
+
+const valid=
+(role==="owner"&&username==="owner"&&pin==="6069")||
+(role==="staff"&&username==="staff"&&pin==="5678");
+
+if(!valid){
+el("loginError").textContent="Wrong Username or PIN";
+return;
+}
+
+currentRole=role;
+data=readData();
+el("loginError").textContent="";
+el("pin").value="";
+el("loginPage").classList.add("hidden");
+el("appPage").classList.remove("hidden");
+el("ownerPanel").classList.toggle("hidden",role!=="owner");
+el("welcome").textContent=role==="owner"?"Owner Dashboard":"Staff Dashboard";
+renderMenu();
+render();
+}
+
+function logout(){
+currentRole="";
+el("appPage").classList.add("hidden");
+el("loginPage").classList.remove("hidden");
+el("pin").value="";
+}
+
+function renderMenu(){
+const old=el("orderItem").value;
+el("orderItem").replaceChildren(
+...data.menu.map((item,i)=>new Option(item.name+" ₹"+money(item.price),String(i)))
+);
+if(old!==""&&data.menu[Number(old)])el("orderItem").value=old;
+
+el("menuChoice").replaceChildren(
+new Option("Add New Product",""),
+...data.menu.map((item,i)=>new Option(item.name,String(i)))
+);
+editMenu();
+showPhoto();
+}
+
+function showPhoto(){
+const item=data.menu[Number(el("orderItem").value)];
+const photo=el("itemPhoto");
+photo.hidden=!item?.photo;
+if(item?.photo)photo.src=item.photo;
+else photo.removeAttribute("src");
+}
+
+function addOrder(){
+if(!currentRole)return;
+const qty=Number(el("quantity").value);
+const index=Number(el("orderItem").value);
+const item=data.menu[index];
+
+if(!item||!Number.isInteger(qty)||qty<1||qty>10000){
+alert("Enter valid quantity");
+return;
+}
+
+const order={
+id:crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random(),
+date:dateKey(),
+createdAt:new Date().toISOString(),
+item:item.name,
+qty:qty,
+total:Math.round(Number(item.price)*100)*qty/100,
+payment:el("payment").value,
+cancelledAt:null
+};
+
+data.orders.push(order);
+if(saveData()){
+el("quantity").value="1";
+render();
+alert("Order Saved");
+}else{
+data.orders.pop();
+}
+}
+
+function addExpense(){
+if(currentRole!=="owner")return;
+const name=el("expenseName").value.trim();
+const amount=Number(el("expenseAmount").value);
+
+if(!name||!Number.isFinite(amount)||amount<=0){
+alert("Enter valid expense");
+return;
+}
+
+data.expenses.push({
+date:dateKey(),
+name:name,
+amount:Math.round(amount*100)/100
+});
+
+if(saveData()){
+el("expenseName").value="";
+el("expenseAmount").value="";
+render();
+alert("Expense Saved");
+}else{
+data.expenses.pop();
+}
+}
+
+function cancelOrder(id){
+if(currentRole!=="owner")return;
+const order=data.orders.find(o=>o.id===id);
+if(!order||order.cancelledAt)return;
+if(!confirm("Cancel this order?"))return;
+
+order.cancelledAt=new Date().toISOString();
+if(saveData()){
+render();
+}else{
+order.cancelledAt=null;
+}
+}
+
+function render(){
+const today=dateKey();
+const month=today.slice(0,7);
+
+const active=data.orders.filter(o=>!o.cancelledAt);
+const sumOrders=arr=>arr.reduce((s,o)=>s+Number(o.total||0),0);
+const sumExpenses=arr=>arr.reduce((s,e)=>s+Number(e.amount||0),0);
+
+const dailySales=sumOrders(active.filter(o=>o.date===today));
+const dailyExpenses=sumExpenses(data.expenses.filter(e=>e.date===today));
+const monthlySales=sumOrders(active.filter(o=>o.date?.startsWith(month)));
+const monthlyExpenses=sumExpenses(data.expenses.filter(e=>e.date?.startsWith(month)));
+
+el("sales").textContent=money(dailySales);
+el("expenses").textContent=money(dailyExpenses);
+el("profit").textContent=money(dailySales-dailyExpenses);
+el("monthSales").textContent=money(monthlySales);
+el("monthExpenses").textContent=money(monthlyExpenses);
+el("monthProfit").textContent=money(monthlySales-monthlyExpenses);
+
+const list=el("orderList");
+list.replaceChildren();
+
+const recent=data.orders.slice(-20).reverse();
+
+if(!recent.length){
+list.textContent="No orders yet";
+return;
+}
+
+recent.forEach(order=>{
+const row=document.createElement("div");
+row.className="row";
+
+const text=document.createElement("div");
+text.textContent=order.date+" | "+order.item+" × "+order.qty+
+" | ₹"+money(order.total)+" | "+order.payment;
+row.append(text);
+
+if(order.cancelledAt){
+const status=document.createElement("p");
+status.className="error";
+status.textContent="Cancelled / റദ്ദാക്കി";
+row.append(status);
+}else if(currentRole==="owner"){
+const btn=document.createElement("button");
+btn.className="danger";
+btn.textContent="Cancel Order";
+btn.onclick=()=>cancelOrder(order.id);
+row.append(btn);
+}
+list.append(row);
+});
+}
+
+function editMenu(){
+const selected=el("menuChoice").value;
+const item=selected===""?null:data.menu[Number(selected)];
+el("menuName").value=item?.name||"";
+el("menuPrice").value=item?.price??"";
+el("menuPhoto").value="";
+el("menuMessage").textContent="";
+}
+
+async function resizePhoto(file){
+const url=URL.createObjectURL(file);
+try{
+const image=new Image();
+image.src=url;
+await image.decode();
+const scale=Math.min(1,360/Math.max(image.naturalWidth,image.naturalHeight));
+const canvas=document.createElement("canvas");
+canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));
+canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+const ctx=canvas.getContext("2d");
+ctx.fillStyle="#fff";
+ctx.fillRect(0,0,canvas.width,canvas.height);
+ctx.drawImage(image,0,0,canvas.width,canvas.height);
+return canvas.toDataURL("image/jpeg",0.7);
+}finally{
+URL.revokeObjectURL(url);
+}
+}
+
+async function saveMenu(){
+if(currentRole!=="owner")return;
+const name=el("menuName").value.trim();
+const price=Number(el("menuPrice").value);
+const selection=el("menuChoice").value;
+const file=el("menuPhoto").files[0];
+
+if(!name||!Number.isFinite(price)||price<=0){
+alert("Enter valid product name and price");
+return;
+}
+
+const button=el("menuSaveButton");
+button.disabled=true;
+
+try{
+let photo;
+if(file)photo=await resizePhoto(file);
+if(currentRole!=="owner")return;
+
+const nextMenu=data.menu.map(x=>({...x}));
+const index=selection===""?nextMenu.length:Number(selection);
+
+if(selection!==""&&!nextMenu[index])throw Error("Invalid item");
+
+nextMenu[index]={
+...nextMenu[index],
+name:name,
+price:Math.round(price*100)/100
+};
+
+if(photo)nextMenu[index].photo=photo;
+
+const previous=data.menu;
+data.menu=nextMenu;
+
+if(saveData()){
+renderMenu();
+el("menuMessage").textContent="Product Saved ✅";
+}else{
+data.menu=previous;
+}
+}catch(e){
+alert("Could not save product. Try a smaller JPEG photo.");
+}finally{
+button.disabled=false;
+}
+}
+</script>
+</body>
+</html>
