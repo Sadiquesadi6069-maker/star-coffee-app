@@ -33,7 +33,7 @@ small{color:#666}
 <input id="pin" type="password" inputmode="numeric" placeholder="PIN">
 <button onclick="login()">Login</button>
 <p id="error"></p>
-<small>Demo Owner: owner / <br>Demo Staff: staff / 5678</small>
+<small>Demo Owner: owner / 6069<br>Demo Staff: staff / 5678</small>
 </section>
 <section id="app" class="hidden">
 <div class="card">
@@ -128,7 +128,7 @@ function login() {
   const role = el("role").value;
   const user = el("username").value.trim();
   const pin = el("pin").value;
-  if (!((role === "owner" && user === "owner" && pin === ||
+  if (!((role === "owner" && user === "owner" && pin === "6069"||
         (role === "staff" && user === "staff" && pin === "5678"))) {
     el("error").textContent = "Wrong username or PIN";
     return;
