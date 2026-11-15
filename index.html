@@ -1,1 +1,166 @@
 
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Star Coffee App</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f5f2eb;margin:0;color:#222}
+header{background:#49301f;color:white;padding:18px;text-align:center}
+main{max-width:520px;margin:auto;padding:16px}
+.card{background:white;border-radius:12px;padding:18px;margin:12px 0;box-shadow:0 2px 8px #ddd}
+input,select,button{box-sizing:border-box;width:100%;padding:13px;margin:7px 0;border-radius:8px;border:1px solid #ccc;font-size:16px}
+button{background:#49301f;color:white;border:0;font-weight:bold}
+button:disabled{opacity:.5}
+.secondary{background:#777}
+.hidden{display:none}
+h2{color:#49301f}
+small{color:#666}
+</style>
+</head>
+<body>
+<header>
+<h1>☕ STAR COFFEE</h1>
+<div>Owner & Staff App</div>
+</header>
+<main>
+<section id="login" class="card">
+<h2>Login / ലോഗിൻ</h2>
+<select id="role">
+<option value="owner">Owner</option>
+<option value="staff">Staff</option>
+</select>
+<input id="username" placeholder="Username">
+<input id="pin" type="password" inputmode="numeric" placeholder="PIN">
+<button onclick="login()">Login</button>
+<p id="error"></p>
+<small>Demo Owner: owner / 1234<br>Demo Staff: staff / 5678</small>
+</section>
+
+<section id="app" class="hidden">
+<div class="card">
+<h2 id="welcome"></h2>
+<button class="secondary" onclick="logout()">Logout</button>
+</div>
+
+<div class="card">
+<h2>🧾 New Order</h2>
+<select id="item">
+<option value="Tea" data-price="12">Tea ₹12</option>
+<option value="Coffee" data-price="20">Coffee ₹20</option>
+<option value="Black Coffee" data-price="15">Black Coffee ₹15</option>
+<option value="Snacks" data-price="20">Snacks ₹20</option>
+</select>
+<input id="qty" type="number" min="1" value="1" placeholder="Quantity">
+<select id="payment">
+<option>Cash</option>
+<option>UPI</option>
+</select>
+<button onclick="addOrder()">Save Order</button>
+</div>
+
+<div id="ownerPanel" class="hidden">
+<div class="card">
+<h2>📊 Business Dashboard</h2>
+<p>Today Sales: ₹<b id="sales">0</b></p>
+<p>Today Expenses: ₹<b id="expenses">0</b></p>
+<p>Today Profit: ₹<b id="profit">0</b></p>
+<small>Profit here means sales minus entered expenses.</small>
+</div>
+<div class="card">
+<h2>💸 Add Expense</h2>
+<input id="expenseName" placeholder="Expense name">
+<input id="expenseAmount" type="number" min="0.01" step="0.01" placeholder="Amount ₹">
+<button onclick="addExpense()">Save Expense</button>
+</div>
+</div>
+
+<div class="card">
+<h2>Recent Orders</h2>
+<div id="orders"></div>
+</div>
+</section>
+</main>
+<script>
+const KEY="starCoffeeDemoV1";
+let currentRole="";
+let data;
+try{
+ data=JSON.parse(localStorage.getItem(KEY))||{};
+}catch(e){data={};}
+if(!Array.isArray(data.orders))data.orders=[];
+if(!Array.isArray(data.expenses))data.expenses=[];
+function save(){
+ try{localStorage.setItem(KEY,JSON.stringify(data));}
+ catch(e){alert("Could not save data");}
+}
+function today(){
+ const d=new Date();
+ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function login(){
+ const role=document.getElementById("role").value;
+ const user=document.getElementById("username").value.trim();
+ const pin=document.getElementById("pin").value;
+ if((role==="owner"&&user==="owner"&&pin==="1234")||
+ (role==="staff"&&user==="staff"&&pin==="5678")){
+ currentRole=role;
+ document.getElementById("login").classList.add("hidden");
+ document.getElementById("app").classList.remove("hidden");
+ document.getElementById("ownerPanel").classList.toggle("hidden",role!=="owner");
+ document.getElementById("welcome").textContent=role==="owner"?"Owner Dashboard":"Staff Dashboard";
+ render();
+ }else{
+ document.getElementById("error").textContent="Wrong username or PIN";
+ }
+}
+function logout(){
+ currentRole="";
+ document.getElementById("app").classList.add("hidden");
+ document.getElementById("login").classList.remove("hidden");
+ document.getElementById("pin").value="";
+}
+function addOrder(){
+ const sel=document.getElementById("item");
+ const qty=Number(document.getElementById("qty").value);
+ if(!Number.isInteger(qty)||qty<1){alert("Enter valid quantity");return;}
+ const option=sel.options[sel.selectedIndex];
+ data.orders.push({
+ date:today(),item:sel.value,qty:qty,
+ total:Number(option.dataset.price)*qty,
+ payment:document.getElementById("payment").value
+ });
+ save();render();alert("Order saved");
+}
+function addExpense(){
+ if(currentRole!=="owner")return;
+ const name=document.getElementById("expenseName").value.trim();
+ const amount=Number(document.getElementById("expenseAmount").value);
+ if(!name||!Number.isFinite(amount)||amount<=0){
+ alert("Enter valid expense");return;
+ }
+ data.expenses.push({date:today(),name:name,amount:amount});
+ save();render();alert("Expense saved");
+}
+function render(){
+ const orders=data.orders.filter(x=>x.date===today());
+ const expenses=data.expenses.filter(x=>x.date===today());
+ const sales=orders.reduce((s,x)=>s+x.total,0);
+ const costs=expenses.reduce((s,x)=>s+x.amount,0);
+ document.getElementById("sales").textContent=sales.toFixed(2);
+ document.getElementById("expenses").textContent=costs.toFixed(2);
+ document.getElementById("profit").textContent=(sales-costs).toFixed(2);
+ const box=document.getElementById("orders");
+ box.replaceChildren();
+ orders.slice(-10).reverse().forEach(o=>{
+ const p=document.createElement("p");
+ p.textContent=o.item+" × "+o.qty+" — ₹"+o.total+" ("+o.payment+")";
+ box.appendChild(p);
+ });
+ if(!orders.length)box.textContent="No orders today";
+}
+</script>
+</body>
+</html>
+
