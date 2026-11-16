@@ -9,17 +9,24 @@
 </style>
 </head>
 <body>
-<header><h1>☕ STAR COFFEE</h1><p>Owner &amp; Staff App</p></header>
+<header><h1>☕ STAR COFFEE</h1><p>Owner • Staff • Customer</p></header>
 <main>
 <section id="loginPage" class="card">
 <h2>Login / ലോഗിൻ</h2>
-<p>Firebase-ൽ നിലവിലുള്ള email, password ഉപയോഗിക്കുക.</p>
+<label for="loginRole">Login തിരഞ്ഞെടുക്കുക</label><select id="loginRole" onchange="chooseRole()"><option value="owner">Owner</option><option value="staff">Staff</option></select>
+<p id="loginHelp">Owner: നിലവിലുള്ള email, password ഉപയോഗിക്കുക.</p>
 <input id="username" type="email" placeholder="Email" autocomplete="username">
 <input id="pin" type="password" autocomplete="current-password" placeholder="Password">
+<button id="passwordKeyboard" class="secondary hidden" onclick="el('pin').inputMode='text';el('pin').focus()">ആദ്യ login: പഴയ password എഴുതാൻ</button>
 <button id="loginButton" disabled type="button" onclick="login()">Login</button><p id="loginError" class="error">Firebase ലോഡ് ചെയ്യുന്നു…</p>
+<button class="secondary" id="customerButton" disabled onclick="openCustomer()">Customer — Menu കാണുക (Login വേണ്ട)</button>
 </section>
+<section id="customerPage" class="hidden"><div class="card"><h2>☕ Menu</h2><p>സാധനങ്ങൾ തിരഞ്ഞെടുത്ത് Staff-നെ കാണിക്കുക. Staff സ്ഥിരീകരിച്ചാൽ മാത്രമേ ഓർഡർ സേവ് ആകൂ.</p><button class="secondary" onclick="closeCustomer()">തിരികെ / Login</button><p id="customerStatus" role="status"></p><div id="customerMenu"></div></div><div class="card"><h2>തിരഞ്ഞെടുത്തവ</h2><div id="cartList"></div><h3>Total: ₹<span id="cartTotal">0.00</span></h3><button class="secondary" onclick="emptyCart()">തിരഞ്ഞെടുപ്പ് ഒഴിവാക്കുക</button></div><div class="card"><h2>UPI Payment</h2><div id="customerQR"></div><p>പണമടച്ച വിവരം Staff സ്ഥിരീകരിക്കണം.</p></div></section>
 <section id="appPage" class="hidden"><p id="status" role="status" aria-live="polite"></p>
 <div class="card"><h2 id="welcome"></h2><button class="secondary" onclick="logout()">Logout</button></div>
+<div class="card"><h2>Stock / ലഭ്യത</h2><p>Stock തീർന്നവ Customer menu-ൽ കാണിക്കില്ല. വീണ്ടും ലഭ്യമാക്കാനും ഇവിടെ കഴിയും.</p><div id="stockList"></div></div>
+<div class="card"><h2>UPI Payment</h2><div id="staffQR"></div></div>
+<div id="staffPinPanel" class="card hidden"><h2>Staff PIN സജ്ജമാക്കുക / മാറ്റുക</h2><p>കുറഞ്ഞത് 6 അക്കങ്ങൾ. PIN ഇവിടെ സേവ് ചെയ്യുമ്പോൾ Staff-ന്റെ Firebase password ഇതായി മാറും.</p><input id="newPin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="പുതിയ PIN"><input id="repeatPin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="PIN വീണ്ടും"><button id="setPinButton" onclick="setStaffPin()">Save PIN</button><p id="pinResult" role="status"></p></div>
 <div class="card">
 <h2>🧾 New Order</h2>
 <select id="orderItem" onchange="showPhoto()"></select>
@@ -28,7 +35,7 @@
 <select id="payment"><option value="Cash">Cash</option><option value="UPI">UPI</option></select>
 <button id="saveOrderButton" onclick="addOrder()">Save Order</button>
 </div>
-<div id="ownerPanel" class="hidden">
+<div id="ownerPanel" class="hidden"><div class="card"><h2>UPI QR code ചേർക്കുക</h2><p>ഇപ്പോൾ ഒഴിവാക്കാം. പിന്നീട് നിങ്ങളുടെ കടയുടെ QR ചിത്രം ഇവിടെ അപ്‌ലോഡ് ചെയ്യാം.</p><input id="payeeName" placeholder="കട / അക്കൗണ്ട് പേര്" maxlength="100"><input id="upiId" placeholder="UPI ID (optional)" maxlength="150"><label for="qrFile">QR ചിത്രം (PNG/JPEG/WebP, 350 KB വരെ)</label><input id="qrFile" type="file" accept="image/png,image/jpeg,image/webp"><button id="qrSave" onclick="saveQR(false)">Save UPI details</button><button id="qrRemove" class="secondary" onclick="saveQR(true)">QR ഒഴിവാക്കുക</button><p>അപ്‌ലോഡ് ചെയ്ത ശേഷം സ്കാൻ ചെയ്ത് അക്കൗണ്ട് ശരിയാണെന്ന് പരിശോധിക്കുക.</p></div>
 <div class="card">
 <h2>📊 Business Dashboard</h2><div class="stat">Today Cash: ₹<b id="cashSales">0</b></div><div class="stat">Today UPI: ₹<b id="upiSales">0</b></div>
 <div class="stat">Today Sales: ₹<b id="sales">0</b></div>
@@ -58,15 +65,16 @@ const config={apiKey:'AIzaSyBTKnOdxDsCPabHOW42oERTej2MC2HVJlE',authDomain:'star-
 const el=id=>document.getElementById(id),money=n=>(Number(n||0)/100).toFixed(2);
 const day=()=>Math.floor((Date.now()+19800000)/86400000);
 const dateOf=d=>new Date(d*86400000).toISOString().slice(0,10);
+let cart={},paymentInfo={},customerMode=false;
 let auth,db,F,A,user=null,role='',products=[],orders=[],expenses=[],unsubs=[],orderSub=null,lastDay=day(),busy=false;
 const stamp=()=>F.serverTimestamp();
 function message(text){el('status').textContent=text;}
 function failure(e){message('സേവ്/ലോഡ് ചെയ്യാനായില്ല: '+(e.code||e.message)+'. Internet, Firebase Rules പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.');}
-function clear(){unsubs.forEach(f=>f());unsubs=[];if(orderSub)orderSub();orderSub=null;products=[];orders=[];expenses=[];role='';el('orderList').replaceChildren();el('ownerPanel').classList.add('hidden');['sales','expenses','profit','monthSales','monthExpenses','monthProfit','cashSales','upiSales'].forEach(id=>el(id).textContent='');}
+function clear(){unsubs.forEach(f=>f());unsubs=[];if(orderSub)orderSub();orderSub=null;orders=[];expenses=[];role='';el('stockList').replaceChildren();el('newPin').value='';el('repeatPin').value='';el('pinResult').textContent='';el('orderList').replaceChildren();el('ownerPanel').classList.add('hidden');['sales','expenses','profit','monthSales','monthExpenses','monthProfit','cashSales','upiSales'].forEach(id=>el(id).textContent='');}
 async function login(){
  if(!auth||busy)return;busy=true;el('loginButton').disabled=true;el('loginError').textContent='';
- try{await A.signInWithEmailAndPassword(auth,el('username').value.trim(),el('pin').value);el('pin').value='';}
- catch(e){el('loginError').textContent='Login പരാജയപ്പെട്ടു: '+e.code+'. Firebase-ലെ email, password ഉപയോഗിക്കുക.';}
+ try{const staff=el('loginRole').value==='staff';if(staff && el('username').value.trim().toLowerCase()!=='pc star')throw Error('Staff username: pc star');await A.signInWithEmailAndPassword(auth,staff?'starcoffee.staff2026@gmail.com':el('username').value.trim(),el('pin').value);el('pin').value='';}
+ catch(e){el('loginError').textContent='Login പരാജയപ്പെട്ടു: '+(e.code||e.message)+'. നൽകിയ login വിവരങ്ങൾ പരിശോധിക്കുക.';}
  finally{busy=false;el('loginButton').disabled=false;}
 }
 async function logout(){try{await A.signOut(auth);}catch(e){failure(e);}}
@@ -82,23 +90,23 @@ function listenOrders(){
 }
 function start(){
  const uid=user.uid;
- unsubs.push(F.onSnapshot(F.collection(db,'products'),snap=>{if(user?.uid!==uid)return;products=snap.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>a.name.localeCompare(b.name));renderMenu();},failure));
+ renderMenu();renderPayment();if(role==='owner'){el('payeeName').value=paymentInfo.payeeName||'';el('upiId').value=paymentInfo.upiId||'';}
  if(role==='owner')unsubs.push(F.onSnapshot(F.collection(db,'expenses'),snap=>{if(user?.uid!==uid)return;expenses=snap.docs.map(d=>({...d.data(),id:d.id}));render();},failure));
  listenOrders();
 }
 function renderMenu(){
- const old=el('orderItem').value,selected=el('menuChoice').value;
- el('orderItem').replaceChildren(...products.map(p=>new Option(p.name+' ₹'+money(p.pricePaise),p.id)));
- if(products.some(p=>p.id===old))el('orderItem').value=old;
+ const available=products.filter(p=>p.available!==false);const old=el('orderItem').value,selected=el('menuChoice').value;
+ el('orderItem').replaceChildren(...available.map(p=>new Option(p.name+' ₹'+money(p.pricePaise),p.id)));
+ if(available.some(p=>p.id===old))el('orderItem').value=old;
  el('menuChoice').replaceChildren(new Option('Add New Product',''),...products.map(p=>new Option(p.name,p.id)));
  if(products.some(p=>p.id===selected))el('menuChoice').value=selected;
- el('saveOrderButton').disabled=!products.length;showPhoto();
+ el('saveOrderButton').disabled=!available.length;showPhoto();renderStock();renderCustomer();
 }
 function showPhoto(){const p=products.find(p=>p.id===el('orderItem').value),photo=el('itemPhoto');photo.hidden=!p?.photo;if(p?.photo)photo.src=p.photo;else photo.removeAttribute('src');}
 async function writeAction(button,fn){if(!user||button.disabled)return;button.disabled=true;message('Cloud-ൽ സേവ് ചെയ്യുന്നു…');try{await fn();message('Cloud-ൽ സേവ് ചെയ്തു ✓');}catch(e){failure(e);}finally{button.disabled=false;}}
 async function addOrder(){
  const p=products.find(p=>p.id===el('orderItem').value),qty=Number(el('quantity').value);
- if(!p||!Number.isInteger(qty)||qty<1||qty>10000){alert('സാധനവും ശരിയായ എണ്ണവും തിരഞ്ഞെടുക്കുക');return;}
+ if(!p||p.available===false||!Number.isInteger(qty)||qty<1||qty>10000){alert('സാധനവും ശരിയായ എണ്ണവും തിരഞ്ഞെടുക്കുക');return;}
  if(!navigator.onLine){message('Internet വന്ന ശേഷം Save Order അമർത്തുക.');return;}
  await writeAction(el('saveOrderButton'),async()=>{await F.addDoc(F.collection(db,'orders'),{day:day(),createdAt:stamp(),createdBy:user.uid,productId:p.id,item:p.name,qty,unitPaise:p.pricePaise,totalPaise:p.pricePaise*qty,payment:el('payment').value,cancelledAt:null,cancelledBy:null});el('quantity').value='1';});
 }
@@ -114,12 +122,12 @@ async function resizePhoto(file){const url=URL.createObjectURL(file);try{const i
 async function saveMenu(){
  const name=el('menuName').value.trim(),pricePaise=Math.round(Number(el('menuPrice').value)*100),id=el('menuChoice').value,file=el('menuPhoto').files[0];
  if(role!=='owner'||!name||name.length>100||!Number.isSafeInteger(pricePaise)||pricePaise<=0||pricePaise>10000000){alert('ശരിയായ പേരും വിലയും നൽകുക');return;}
- await writeAction(el('menuSaveButton'),async()=>{let photo=products.find(p=>p.id===id)?.photo||'';if(file)photo=await resizePhoto(file);const ref=id?F.doc(db,'products',id):F.doc(F.collection(db,'products'));await F.setDoc(ref,{name,pricePaise,photo});el('menuMessage').textContent='Product Saved ✓';});
+ await writeAction(el('menuSaveButton'),async()=>{let photo=products.find(p=>p.id===id)?.photo||'';if(file)photo=await resizePhoto(file);const ref=id?F.doc(db,'products',id):F.doc(F.collection(db,'products'));if(id){await F.updateDoc(ref,{name,pricePaise,photo});}else{await F.setDoc(ref,{name,pricePaise,photo,available:true});}el('menuMessage').textContent='Product Saved ✓';});
 }
-async function seed(){if(role!=='owner')return;await writeAction(el('seedButton'),async()=>{for(const [id,name,pricePaise] of [['tea','Tea',1200],['coffee','Coffee',2000],['black-coffee','Black Coffee',1500],['snacks','Snacks',2000]]){const ref=F.doc(db,'products',id);await F.runTransaction(db,async tx=>{const s=await tx.get(ref);if(!s.exists())tx.set(ref,{name,pricePaise,photo:''});});}});}
+async function seed(){if(role!=='owner')return;await writeAction(el('seedButton'),async()=>{for(const [id,name,pricePaise] of [['tea','Tea',1200],['coffee','Coffee',2000],['black-coffee','Black Coffee',1500],['snacks','Snacks',2000]]){const ref=F.doc(db,'products',id);await F.runTransaction(db,async tx=>{const s=await tx.get(ref);if(!s.exists())tx.set(ref,{name,pricePaise,photo:'',available:true});});}});}
 function render(){
  if(!role)return;const owner=role==='owner',today=day(),month=dateOf(today).slice(0,7);
- el('ownerPanel').classList.toggle('hidden',!owner);el('historyFilter').classList.toggle('hidden',!owner);
+ el('staffPinPanel').classList.toggle('hidden',role!=='staff');el('ownerPanel').classList.toggle('hidden',!owner);el('historyFilter').classList.toggle('hidden',!owner);
  el('ordersHeading').textContent=owner?'📋 എല്ലാ ഓർഡറുകളും':'📋 ഇന്നത്തെ ഓർഡറുകൾ';
  el('ordersNote').textContent=owner?'റദ്ദാക്കിയവ വിൽപ്പനയിൽ കൂട്ടില്ല. സമയം: India.':'ഇന്ത്യൻ സമയം അർദ്ധരാത്രിക്ക് പഴയ ഓർഡറുകൾ ഈ ലിസ്റ്റിൽനിന്ന് മാറും.';
  const confirmed=orders.filter(o=>!o.pending&&!o.cancelledAt),sum=a=>a.reduce((s,o)=>s+Number(o.totalPaise||0),0);
@@ -134,6 +142,20 @@ function render(){
  else if(o.cancelledAt){const p=document.createElement('p');p.className='error';p.textContent='റദ്ദാക്കി'+(owner?' — '+(o.cancelledBy===STAFF?'Staff':'Owner'):'');row.append(p);}
  else{const b=document.createElement('button');b.className='danger';b.textContent='ഓർഡർ റദ്ദാക്കുക / Cancel Order';b.onclick=()=>cancelOrder(o.id,b);row.append(b);}list.append(row);}
 }
+function chooseRole(){const staff=el('loginRole').value==='staff';el('passwordKeyboard').classList.toggle('hidden',!staff);el('username').type=staff?'text':'email';el('username').value=staff?'pc star':'';el('username').placeholder=staff?'Username':'Email';el('pin').value='';el('pin').placeholder=staff?'PIN / ആദ്യമായി നിലവിലുള്ള password':'Password';el('pin').inputMode=staff?'numeric':'text';el('loginHelp').textContent=staff?'Username: pc star. ആദ്യം നിലവിലുള്ള Staff password ഉപയോഗിച്ച് login ചെയ്യുക; തുടർന്ന് Staff PIN സജ്ജമാക്കാം. Password എഴുതാൻ keyboard-ൽ ABC തിരഞ്ഞെടുക്കുക.':'Owner: നിലവിലുള്ള email, password ഉപയോഗിക്കുക.';}
+async function setStaffPin(){if(role!=='staff'||auth.currentUser?.uid!==STAFF)return;const pin=el('newPin').value;const result=el('pinResult');if(!/^\d{6,30}$/.test(pin)||pin!==el('repeatPin').value){result.textContent='6–30 അക്കങ്ങളുള്ള PIN രണ്ടിടത്തും ഒരുപോലെ നൽകുക.';return;}el('setPinButton').disabled=true;try{const policy=await A.validatePassword(auth,pin);if(!policy.isValid)throw Error('Firebase password policy ഈ PIN അനുവദിക്കുന്നില്ല. നിലവിലുള്ള password മാറ്റിയിട്ടില്ല.');await A.updatePassword(auth.currentUser,pin);el('newPin').value='';el('repeatPin').value='';result.textContent='PIN മാറ്റി ✓ ഇനി pc star + പുതിയ PIN ഉപയോഗിക്കാം.';}catch(e){result.textContent=e.code==='auth/requires-recent-login'?'Logout ചെയ്ത് നിലവിലെ password/PIN ഉപയോഗിച്ച് വീണ്ടും login ചെയ്തശേഷം ശ്രമിക്കുക.':(e.code||e.message);}finally{el('setPinButton').disabled=false;}}
+function startPublic(){F.onSnapshot(F.collection(db,'products'),snap=>{products=snap.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>a.name.localeCompare(b.name));el('customerStatus').textContent='';renderMenu();},e=>{products=[];renderMenu();el('customerStatus').textContent='Menu ലഭ്യമല്ല. പുതിയ Firebase Rules Publish ചെയ്തിട്ടുണ്ടോ എന്ന് പരിശോധിക്കുക.';failure(e);});F.onSnapshot(F.doc(db,'settings','payment'),snap=>{paymentInfo=snap.exists()?snap.data():{};renderPayment();if(role==='owner'){el('payeeName').value=paymentInfo.payeeName||'';el('upiId').value=paymentInfo.upiId||'';}},e=>{paymentInfo={};renderPayment();failure(e);});}
+async function openCustomer(){if(user){await A.signOut(auth);}customerMode=true;el('loginPage').classList.add('hidden');el('appPage').classList.add('hidden');el('customerPage').classList.remove('hidden');renderCustomer();renderPayment();}
+function closeCustomer(){customerMode=false;el('customerPage').classList.add('hidden');el('loginPage').classList.remove('hidden');}
+function node(tag,text){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;}
+function renderStock(){const list=el('stockList');list.replaceChildren();if(!user)return;for(const p of products){const row=node('div');row.className='row';row.append(node('b',p.name+' — '+(p.available===false?'Stock തീർന്നു':'ലഭ്യമാണ്')));const b=node('button',p.available===false?'വീണ്ടും ലഭ്യമാക്കുക':'Stock തീർന്നു — Menu-ൽ മറയ്ക്കുക');b.className=p.available===false?'secondary':'danger';b.onclick=()=>toggleStock(p.id,p.available===false,b);row.append(b);list.append(row);}if(!products.length)list.textContent='Owner സാധനങ്ങൾ ചേർത്താൽ ഇവിടെ കാണാം.';}
+async function toggleStock(id,available,button){if(!['owner','staff'].includes(role))return;await writeAction(button,()=>F.updateDoc(F.doc(db,'products',id),{available}));}
+function changeCart(id,delta){const p=products.find(p=>p.id===id&&p.available!==false);if(!p)return;cart[id]=Math.max(0,Math.min(99,(cart[id]||0)+delta));if(!cart[id])delete cart[id];renderCustomer();}
+function emptyCart(){cart={};renderCustomer();}
+function renderCustomer(){const menu=el('customerMenu'),list=el('cartList');menu.replaceChildren();list.replaceChildren();const available=products.filter(p=>p.available!==false);for(const id of Object.keys(cart)){if(!available.some(p=>p.id===id)){delete cart[id];el('customerStatus').textContent='Stock തീർന്ന സാധനം തിരഞ്ഞെടുപ്പിൽനിന്ന് ഒഴിവാക്കി.';}}let total=0;for(const p of available){const row=node('div');row.className='row';if(p.photo){const img=node('img');img.src=p.photo;img.alt=p.name;img.className='photo';row.append(img);}row.append(node('h3',p.name+' — ₹'+money(p.pricePaise)));const add=node('button',cart[p.id]?'കൂടുതൽ + ('+cart[p.id]+')':'തിരഞ്ഞെടുക്കുക +');add.onclick=()=>changeCart(p.id,1);row.append(add);menu.append(row);if(cart[p.id]){const c=node('div');c.className='row';c.append(node('span',p.name+' × '+cart[p.id]+' = ₹'+money(p.pricePaise*cart[p.id])));const less=node('button','ഒന്ന് കുറയ്ക്കുക −');less.className='secondary';less.onclick=()=>changeCart(p.id,-1);c.append(less);list.append(c);total+=p.pricePaise*cart[p.id];}}if(!available.length)menu.textContent='ഇപ്പോൾ ലഭ്യമായ സാധനങ്ങളില്ല.';if(!total)list.textContent='Menu-ൽ നിന്ന് സാധനങ്ങൾ തിരഞ്ഞെടുക്കുക.';el('cartTotal').textContent=money(total);}
+function renderPayment(){for(const id of ['customerQR','staffQR']){const box=el(id);box.replaceChildren();if(!paymentInfo.qrImage){box.textContent='QR code പിന്നീട് ചേർക്കും. Cash / Staff-നോട് ചോദിക്കുക.';continue;}const img=node('img');img.src=paymentInfo.qrImage;img.alt='Shop UPI QR code';img.style.cssText='display:block;width:100%;max-width:320px;height:auto;background:white;margin:auto';box.append(img,node('p',paymentInfo.payeeName||''),node('p',paymentInfo.upiId||''));}}
+async function saveQR(remove){if(role!=='owner')return;if(remove&&!confirm('UPI QR ചിത്രം ഒഴിവാക്കണോ?'))return;await writeAction(el(remove?'qrRemove':'qrSave'),async()=>{let qrImage=remove?'':paymentInfo.qrImage||'';const file=el('qrFile').files[0];if(file&&!remove){if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>350000)throw Error('PNG/JPEG/WebP ചിത്രം 350 KB-ൽ താഴെ തിരഞ്ഞെടുക്കുക.');qrImage=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(Error('QR ചിത്രം വായിക്കാനായില്ല'));r.readAsDataURL(file);});}const details={qrImage,payeeName:el('payeeName').value.trim(),upiId:el('upiId').value.trim()};await F.setDoc(F.doc(db,'settings','payment'),details);paymentInfo=details;el('qrFile').value='';renderPayment();});}
+
 function refreshDay(){if(lastDay!==day()){lastDay=day();if(user){orders=[];render();listenOrders();}}}
 Object.assign(window,{el,login,logout,showPhoto,addOrder,addExpense,editMenu,saveMenu,render,seed});
 setInterval(refreshDay,1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDay();});window.addEventListener('focus',refreshDay);
@@ -142,12 +164,12 @@ window.addEventListener('offline',()=>message('Internet ഇല്ല. Cloud സ�
  const base='https://www.gstatic.com/firebasejs/13.3.0/';const App=await import(base+'firebase-app.js');A=await import(base+'firebase-auth.js');F=await import(base+'firebase-firestore.js');
  const app=App.initializeApp(config);auth=A.getAuth(app);db=F.getFirestore(app);
  await A.setPersistence(auth,A.browserSessionPersistence);
- A.onAuthStateChanged(auth,async u=>{clear();user=u;
+ A.onAuthStateChanged(auth,async u=>{clear();user=u;el('customerPage').classList.add('hidden');customerMode=false;
  if(!u){el('appPage').classList.add('hidden');el('loginPage').classList.remove('hidden');return;}
  role=u.uid===OWNER?'owner':u.uid===STAFF?'staff':'';
  if(!role){await A.signOut(auth);el('loginError').textContent='ഈ അക്കൗണ്ടിന് അനുമതിയില്ല.';return;}
  el('welcome').textContent=role==='owner'?'Owner Dashboard':'Staff Dashboard';el('historyDate').value='';el('loginPage').classList.add('hidden');el('appPage').classList.remove('hidden');lastDay=day();render();start();
- });el('loginButton').disabled=false;el('loginError').textContent='';
+ });startPublic();el('customerButton').disabled=false;el('loginButton').disabled=false;el('loginError').textContent='';
  }catch(e){el('loginError').textContent='Firebase ലോഡ് ആയില്ല. Internet പരിശോധിച്ച് Refresh ചെയ്യുക. '+(e.code||e.message);}})();
 </script>
 </body></html>
