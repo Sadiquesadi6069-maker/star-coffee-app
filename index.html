@@ -21,8 +21,8 @@
 <button id="loginButton" disabled type="button" onclick="login()">Login</button><p id="loginError" class="error">Firebase ലോഡ് ചെയ്യുന്നു…</p>
 <button class="secondary" id="customerButton" disabled onclick="openCustomer()">Customer — Menu കാണുക (Login വേണ്ട)</button>
 </section>
-<section id="customerPage" class="hidden"><div class="card"><h2>☕ Menu</h2><p>സാധനങ്ങൾ തിരഞ്ഞെടുത്ത് Staff-നെ കാണിക്കുക. Staff സ്ഥിരീകരിച്ചാൽ മാത്രമേ ഓർഡർ സേവ് ആകൂ.</p><button class="secondary" onclick="closeCustomer()">തിരികെ / Login</button><p id="customerStatus" role="status"></p><div id="customerMenu"></div></div><div class="card"><h2>തിരഞ്ഞെടുത്തവ</h2><div id="cartList"></div><h3>Total: ₹<span id="cartTotal">0.00</span></h3><button class="secondary" onclick="emptyCart()">തിരഞ്ഞെടുപ്പ് ഒഴിവാക്കുക</button></div><div class="card"><h2>UPI Payment</h2><div id="customerQR"></div><p>പണമടച്ച വിവരം Staff സ്ഥിരീകരിക്കണം.</p></div></section>
-<section id="appPage" class="hidden"><p id="status" role="status" aria-live="polite"></p>
+<section id="customerPage" class="hidden"><div class="card"><h2>☕ Menu</h2><p>സാധനങ്ങൾ തിരഞ്ഞെടുത്ത് Order അയയ്ക്കുക. Owner / Staff സ്വീകരിക്കുന്നതുവരെ കാത്തിരിക്കുക. ഒരു ഓർഡറിൽ പരമാവധി 5 വ്യത്യസ്ത സാധനങ്ങൾ.</p><button class="secondary" onclick="closeCustomer()">തിരികെ / Login</button><p id="customerStatus" role="status"></p><div id="customerMenu"></div></div><div class="card"><h2>തിരഞ്ഞെടുത്തവ</h2><div id="cartList"></div><h3>Total: ₹<span id="cartTotal">0.00</span></h3><label for="customerLabel">പേര് / Table നമ്പർ</label><input id="customerLabel" maxlength="60" placeholder="ഉദാ: Table 2 / Sadi"><label for="customerPayment">Payment</label><select id="customerPayment"><option>Cash</option><option>UPI</option></select><button id="sendCustomerOrder" onclick="submitCustomerOrder()">Order അയയ്ക്കുക</button><p id="submitStatus" role="status" aria-live="polite"></p><button class="secondary" onclick="emptyCart()">തിരഞ്ഞെടുപ്പ് ഒഴിവാക്കുക</button></div><div class="card"><h2>UPI Payment</h2><div id="customerQR"></div><p>പണമടച്ച വിവരം Staff സ്ഥിരീകരിക്കണം.</p></div></section>
+<section id="appPage" class="hidden"><div class="card"><h2>Customer Orders</h2><p>പുതിയ ഓർഡറുകൾ ഇവിടെ വരും. പണം ലഭിച്ചശേഷം Accept അമർത്തുക.</p><p id="requestStatus" role="status"></p><div id="customerRequests"></div></div><p id="status" role="status" aria-live="polite"></p>
 <div class="card"><h2 id="welcome"></h2><button class="secondary" onclick="logout()">Logout</button></div>
 <div class="card"><h2>Stock / ലഭ്യത</h2><p>Stock തീർന്നവ Customer menu-ൽ കാണിക്കില്ല. വീണ്ടും ലഭ്യമാക്കാനും ഇവിടെ കഴിയും.</p><div id="stockList"></div></div>
 <div class="card"><h2>UPI Payment</h2><div id="staffQR"></div></div>
@@ -70,7 +70,8 @@ let auth,db,F,A,user=null,role='',products=[],orders=[],expenses=[],unsubs=[],or
 const stamp=()=>F.serverTimestamp();
 function message(text){el('status').textContent=text;}
 function failure(e){message('സേവ്/ലോഡ് ചെയ്യാനായില്ല: '+(e.code||e.message)+'. Internet, Firebase Rules പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.');}
-function clear(){unsubs.forEach(f=>f());unsubs=[];if(orderSub)orderSub();orderSub=null;orders=[];expenses=[];role='';el('stockList').replaceChildren();el('newPin').value='';el('repeatPin').value='';el('pinResult').textContent='';el('orderList').replaceChildren();el('ownerPanel').classList.add('hidden');['sales','expenses','profit','monthSales','monthExpenses','monthProfit','cashSales','upiSales'].forEach(id=>el(id).textContent='');}
+let requestSub=null,customerRequests=[],sendingCustomer=false;
+function clear(){if(requestSub)requestSub();requestSub=null;customerRequests=[];el("customerRequests").replaceChildren();unsubs.forEach(f=>f());unsubs=[];if(orderSub)orderSub();orderSub=null;orders=[];expenses=[];role='';el('stockList').replaceChildren();el('newPin').value='';el('repeatPin').value='';el('pinResult').textContent='';el('orderList').replaceChildren();el('ownerPanel').classList.add('hidden');['sales','expenses','profit','monthSales','monthExpenses','monthProfit','cashSales','upiSales'].forEach(id=>el(id).textContent='');}
 async function login(){
  if(!auth||busy)return;busy=true;el('loginButton').disabled=true;el('loginError').textContent='';
  try{const staff=el('loginRole').value==='staff';if(staff && el('username').value.trim().toLowerCase()!=='pc star')throw Error('Staff username: pc star');await A.signInWithEmailAndPassword(auth,staff?'starcoffee.staff2026@gmail.com':el('username').value.trim(),el('pin').value);el('pin').value='';}
@@ -92,7 +93,7 @@ function start(){
  const uid=user.uid;
  renderMenu();renderPayment();if(role==='owner'){el('payeeName').value=paymentInfo.payeeName||'';el('upiId').value=paymentInfo.upiId||'';}
  if(role==='owner')unsubs.push(F.onSnapshot(F.collection(db,'expenses'),snap=>{if(user?.uid!==uid)return;expenses=snap.docs.map(d=>({...d.data(),id:d.id}));render();},failure));
- listenOrders();
+ listenOrders();listenCustomerRequests();
 }
 function renderMenu(){
  const available=products.filter(p=>p.available!==false);const old=el('orderItem').value,selected=el('menuChoice').value;
@@ -150,13 +151,65 @@ function closeCustomer(){customerMode=false;el('customerPage').classList.add('hi
 function node(tag,text){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;}
 function renderStock(){const list=el('stockList');list.replaceChildren();if(!user)return;for(const p of products){const row=node('div');row.className='row';row.append(node('b',p.name+' — '+(p.available===false?'Stock തീർന്നു':'ലഭ്യമാണ്')));const b=node('button',p.available===false?'വീണ്ടും ലഭ്യമാക്കുക':'Stock തീർന്നു — Menu-ൽ മറയ്ക്കുക');b.className=p.available===false?'secondary':'danger';b.onclick=()=>toggleStock(p.id,p.available===false,b);row.append(b);list.append(row);}if(!products.length)list.textContent='Owner സാധനങ്ങൾ ചേർത്താൽ ഇവിടെ കാണാം.';}
 async function toggleStock(id,available,button){if(!['owner','staff'].includes(role))return;await writeAction(button,()=>F.updateDoc(F.doc(db,'products',id),{available}));}
-function changeCart(id,delta){const p=products.find(p=>p.id===id&&p.available!==false);if(!p)return;cart[id]=Math.max(0,Math.min(99,(cart[id]||0)+delta));if(!cart[id])delete cart[id];renderCustomer();}
+function changeCart(id,delta){if(delta>0&&!cart[id]&&Object.keys(cart).length>=5){el("customerStatus").textContent="ഒരു ഓർഡറിൽ 5 വ്യത്യസ്ത സാധനങ്ങൾ വരെ.";return;}const p=products.find(p=>p.id===id&&p.available!==false);if(!p)return;cart[id]=Math.max(0,Math.min(99,(cart[id]||0)+delta));if(!cart[id])delete cart[id];renderCustomer();}
 function emptyCart(){cart={};renderCustomer();}
 function renderCustomer(){const menu=el('customerMenu'),list=el('cartList');menu.replaceChildren();list.replaceChildren();const available=products.filter(p=>p.available!==false);for(const id of Object.keys(cart)){if(!available.some(p=>p.id===id)){delete cart[id];el('customerStatus').textContent='Stock തീർന്ന സാധനം തിരഞ്ഞെടുപ്പിൽനിന്ന് ഒഴിവാക്കി.';}}let total=0;for(const p of available){const row=node('div');row.className='row';if(p.photo){const img=node('img');img.src=p.photo;img.alt=p.name;img.className='photo';row.append(img);}row.append(node('h3',p.name+' — ₹'+money(p.pricePaise)));const add=node('button',cart[p.id]?'കൂടുതൽ + ('+cart[p.id]+')':'തിരഞ്ഞെടുക്കുക +');add.onclick=()=>changeCart(p.id,1);row.append(add);menu.append(row);if(cart[p.id]){const c=node('div');c.className='row';c.append(node('span',p.name+' × '+cart[p.id]+' = ₹'+money(p.pricePaise*cart[p.id])));const less=node('button','ഒന്ന് കുറയ്ക്കുക −');less.className='secondary';less.onclick=()=>changeCart(p.id,-1);c.append(less);list.append(c);total+=p.pricePaise*cart[p.id];}}if(!available.length)menu.textContent='ഇപ്പോൾ ലഭ്യമായ സാധനങ്ങളില്ല.';if(!total)list.textContent='Menu-ൽ നിന്ന് സാധനങ്ങൾ തിരഞ്ഞെടുക്കുക.';el('cartTotal').textContent=money(total);}
 function renderPayment(){for(const id of ['customerQR','staffQR']){const box=el(id);box.replaceChildren();if(!paymentInfo.qrImage){box.textContent='QR code പിന്നീട് ചേർക്കും. Cash / Staff-നോട് ചോദിക്കുക.';continue;}const img=node('img');img.src=paymentInfo.qrImage;img.alt='Shop UPI QR code';img.style.cssText='display:block;width:100%;max-width:320px;height:auto;background:white;margin:auto';box.append(img,node('p',paymentInfo.payeeName||''),node('p',paymentInfo.upiId||''));}}
 async function saveQR(remove){if(role!=='owner')return;if(remove&&!confirm('UPI QR ചിത്രം ഒഴിവാക്കണോ?'))return;await writeAction(el(remove?'qrRemove':'qrSave'),async()=>{let qrImage=remove?'':paymentInfo.qrImage||'';const file=el('qrFile').files[0];if(file&&!remove){if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>350000)throw Error('PNG/JPEG/WebP ചിത്രം 350 KB-ൽ താഴെ തിരഞ്ഞെടുക്കുക.');qrImage=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(Error('QR ചിത്രം വായിക്കാനായില്ല'));r.readAsDataURL(file);});}const details={qrImage,payeeName:el('payeeName').value.trim(),upiId:el('upiId').value.trim()};await F.setDoc(F.doc(db,'settings','payment'),details);paymentInfo=details;el('qrFile').value='';renderPayment();});}
 
-function refreshDay(){if(lastDay!==day()){lastDay=day();if(user){orders=[];render();listenOrders();}}}
+
+function customerPayload(){
+ const label=el('customerLabel').value.trim();if(!label||label.length>60)throw Error('പേര് / Table നമ്പർ നൽകുക.');
+ const items=Object.entries(cart).map(([id,qty])=>{const p=products.find(p=>p.id===id&&p.available!==false);if(!p||!Number.isInteger(qty)||qty<1||qty>99)throw Error('Menu പുതുക്കി വീണ്ടും തിരഞ്ഞെടുക്കുക.');return {productId:id,item:p.name,qty,unitPaise:p.pricePaise,totalPaise:p.pricePaise*qty};});
+ if(!items.length||items.length>5)throw Error('1 മുതൽ 5 വരെ വ്യത്യസ്ത സാധനങ്ങൾ തിരഞ്ഞെടുക്കുക.');
+ return {day:day(),createdAt:stamp(),customerLabel:label,items,totalPaise:items.reduce((n,i)=>n+i.totalPaise,0),payment:el('customerPayment').value,status:'pending',handledAt:null,handledBy:null};
+}
+async function submitCustomerOrder(){
+ if(sendingCustomer)return;const out=el('submitStatus'),btn=el('sendCustomerOrder');
+ try{
+ if(!navigator.onLine)throw Error('Internet വന്നശേഷം അയയ്ക്കുക.');
+ const prior=sessionStorage.getItem('starPendingRequest');
+ if(prior){out.textContent='മുൻ ഓർഡർ നമ്പർ: '+prior+'. Staff-നോട് എത്തിയോ എന്ന് പരിശോധിക്കുക.';if(!confirm('മുൻ ഓർഡർ Staff-നോട് പരിശോധിച്ചോ? പുതിയ ഓർഡർ അയയ്ക്കണോ?'))return;sessionStorage.removeItem('starPendingRequest');}
+ const payload=customerPayload(),ref=F.doc(F.collection(db,'customerRequests'));
+ sessionStorage.setItem('starPendingRequest',ref.id);sendingCustomer=true;btn.disabled=true;
+ out.textContent='അയയ്ക്കുന്നു… നമ്പർ: '+ref.id+' — വീണ്ടും അയയ്ക്കരുത്.';
+ await F.setDoc(ref,payload);
+ out.textContent='ഓർഡർ അയച്ചു ✓ നമ്പർ: '+ref.id+'. Owner / Staff സ്വീകരിക്കുന്നതുവരെ കാത്തിരിക്കുക. സ്ഥിരീകരണം Staff-നോട് ചോദിക്കുക.';
+ cart={};renderCustomer();
+ }catch(e){if(e.code==='permission-denied')sessionStorage.removeItem('starPendingRequest');out.textContent='അയച്ചതായി സ്ഥിരീകരിച്ചിട്ടില്ല. '+(e.code||e.message)+' — നമ്പർ കാണുന്നുണ്ടെങ്കിൽ Staff-നോട് പരിശോധിക്കുക.';}
+ finally{sendingCustomer=false;btn.disabled=false;}
+}
+function listenCustomerRequests(){
+ if(requestSub)requestSub();const uid=user?.uid;if(!uid)return;
+ const collection=F.collection(db,'customerRequests');const q=role==='owner'?collection:F.query(collection,F.where('day','==',day()));
+ el('requestStatus').textContent='Customer orders ലോഡ് ചെയ്യുന്നു…';
+ requestSub=F.onSnapshot(q,{includeMetadataChanges:true},snap=>{if(user?.uid!==uid)return;customerRequests=snap.docs.map(d=>({...d.data(),id:d.id,pending:d.metadata.hasPendingWrites}));renderCustomerRequests();el('requestStatus').textContent=snap.metadata.fromCache?'Cloud connection പരിശോധിക്കുന്നു…':'Customer orders live ✓';},e=>{customerRequests=[];renderCustomerRequests();el('requestStatus').textContent='Customer orders ലഭ്യമല്ല: '+(e.code||e.message)+'. പുതിയ firestore.txt Rules Publish ചെയ്യുക.';});
+}
+function renderCustomerRequests(){
+ const box=el('customerRequests');box.replaceChildren();
+ const sorted=[...customerRequests].sort((a,b)=>(a.status==='pending'?0:1)-(b.status==='pending'?0:1)||(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+ if(!sorted.length){box.textContent='Customer ഓർഡറുകൾ ഇതുവരെ വന്നിട്ടില്ല.';return;}
+ for(const r of sorted){const row=node('div');row.className='row';row.append(node('h3',r.customerLabel+' — ₹'+money(r.totalPaise)),node('small','Order: '+r.id));for(const i of r.items||[])row.append(node('p',i.item+' × '+i.qty));row.append(node('p',r.payment+' · '+({pending:'സ്വീകരിക്കാൻ ബാക്കി',accepted:'സ്വീകരിച്ചു ✓',rejected:'Cancel ചെയ്തു'}[r.status]||r.status)));
+ if(r.status==='pending'&&!r.pending){const yes=node('button','Accept / Payment സ്ഥിരീകരിക്കുക');yes.onclick=()=>handleCustomerRequest(r.id,true,yes);const no=node('button','Cancel');no.className='secondary';no.onclick=()=>handleCustomerRequest(r.id,false,no);row.append(yes,no);}box.append(row);}
+}
+async function processCustomerRequest(id,accept){
+ if(!user||!['owner','staff'].includes(role))throw Error('Login ചെയ്യുക.');
+ const uid=user.uid;return F.runTransaction(db,async tx=>{
+ const ref=F.doc(db,'customerRequests',id),snap=await tx.get(ref);if(!snap.exists()||snap.data().status!=='pending')throw Error('ഈ ഓർഡർ ഇതിനകം കൈകാര്യം ചെയ്തിട്ടുണ്ട്.');
+ const r=snap.data();if(role==='staff'&&r.day!==day())throw Error('പഴയ ഓർഡർ Owner കൈകാര്യം ചെയ്യണം.');
+ if(accept){const checks=[];for(const i of r.items)checks.push(await tx.get(F.doc(db,'products',i.productId)));
+ checks.forEach((p,n)=>{const i=r.items[n];if(!p.exists()||p.data().available===false||p.data().pricePaise!==i.unitPaise||p.data().name!==i.item)throw Error('Stock / വില മാറി. ഈ request Cancel ചെയ്ത് പുതിയ order എടുക്കുക.');});
+ r.items.forEach((i,n)=>tx.set(F.doc(db,'orders','customer_'+id+'_'+n),{...i,day:day(),createdAt:stamp(),createdBy:uid,payment:r.payment,cancelledAt:null,cancelledBy:null}));}
+ tx.update(ref,{status:accept?'accepted':'rejected',handledAt:stamp(),handledBy:uid});
+ });
+}
+async function handleCustomerRequest(id,accept,button){
+ if(!navigator.onLine){el('requestStatus').textContent='Internet ആവശ്യമാണ്.';return;}
+ if(!confirm(accept?'പണം ലഭിച്ചെന്ന് പരിശോധിച്ചോ? സ്വീകരിച്ച് sales-ൽ ചേർക്കണോ?':'Customer order Cancel ചെയ്യണോ?'))return;
+ button.disabled=true;try{await processCustomerRequest(id,accept);el('requestStatus').textContent=accept?'സ്വീകരിച്ചു; sales-ൽ ചേർത്തു ✓':'Cancel ചെയ്തു.';}catch(e){el('requestStatus').textContent=e.code||e.message;}finally{button.disabled=false;}
+}
+
+function refreshDay(){if(lastDay!==day()){lastDay=day();if(user){orders=[];render();listenOrders();listenCustomerRequests();}}}
 Object.assign(window,{el,login,logout,showPhoto,addOrder,addExpense,editMenu,saveMenu,render,seed});
 setInterval(refreshDay,1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDay();});window.addEventListener('focus',refreshDay);
 window.addEventListener('offline',()=>message('Internet ഇല്ല. Cloud സ്ഥിരീകരണം വരുന്നതുവരെ ഓർഡർ വീണ്ടും ചേർക്കരുത്.'));
