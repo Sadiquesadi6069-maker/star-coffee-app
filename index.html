@@ -1,228 +1,493 @@
-<!DOCTYPE html>
-<html lang="ml">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Star Coffee App</title>
-<style>
-*{box-sizing:border-box}body{font-family:Arial,sans-serif;background:#f5f2eb;margin:0;color:#29221d}header{background:#49301f;color:white;padding:22px;text-align:center}header h1{font-size:29px}main{max-width:560px;margin:auto;padding:15px}.card{background:white;border-radius:14px;padding:18px;margin:13px 0;box-shadow:0 2px 9px #ddd}input,select,button{width:100%;padding:13px;margin:7px 0;border-radius:9px;border:1px solid #ccc;font-size:16px}button{background:#49301f;color:white;border:0;font-weight:bold;cursor:pointer}button:disabled{opacity:.5}.secondary{background:#777}.danger{background:#a83228}.hidden{display:none!important}h2{color:#49301f;font-size:22px}small{color:#666}.row{padding:12px 0;border-bottom:1px solid #ddd}.photo{width:100px;height:100px;object-fit:cover;border-radius:9px}.photo[hidden]{display:none}.stat{background:#f5f2eb;padding:12px;margin:8px 0;border-radius:9px}.error{color:#b3261e}.success{color:green}
-</style>
-</head>
-<body>
-<header><h1>☕ STAR COFFEE</h1><p>Owner • Staff • Customer</p></header>
-<main>
-<section id="loginPage" class="card">
-<h2>Login / ലോഗിൻ</h2>
-<label for="loginRole">Login തിരഞ്ഞെടുക്കുക</label><select id="loginRole" onchange="chooseRole()"><option value="owner">Owner</option><option value="staff">Staff</option></select>
-<p id="loginHelp">Owner: നിലവിലുള്ള email, password ഉപയോഗിക്കുക.</p>
-<input id="username" type="email" placeholder="Email" autocomplete="username">
-<input id="pin" type="password" autocomplete="current-password" placeholder="Password">
-<button id="passwordKeyboard" class="secondary hidden" onclick="el('pin').inputMode='text';el('pin').focus()">ആദ്യ login: പഴയ password എഴുതാൻ</button>
-<button id="loginButton" disabled type="button" onclick="login()">Login</button><p id="loginError" class="error">Firebase ലോഡ് ചെയ്യുന്നു…</p>
-<button class="secondary" id="customerButton" disabled onclick="openCustomer()">Customer — Menu കാണുക (Login വേണ്ട)</button>
-</section>
-<section id="customerPage" class="hidden"><div class="card"><h2>☕ Menu</h2><p>സാധനങ്ങൾ തിരഞ്ഞെടുത്ത് Order അയയ്ക്കുക. Owner / Staff സ്വീകരിക്കുന്നതുവരെ കാത്തിരിക്കുക. ഒരു ഓർഡറിൽ പരമാവധി 5 വ്യത്യസ്ത സാധനങ്ങൾ.</p><button class="secondary" onclick="closeCustomer()">തിരികെ / Login</button><p id="customerStatus" role="status"></p><div id="customerMenu"></div></div><div class="card"><h2>തിരഞ്ഞെടുത്തവ</h2><div id="cartList"></div><h3>Total: ₹<span id="cartTotal">0.00</span></h3><label for="customerLabel">പേര് / Table നമ്പർ</label><input id="customerLabel" maxlength="60" placeholder="ഉദാ: Table 2 / Sadi"><label for="customerPayment">Payment</label><select id="customerPayment"><option>Cash</option><option>UPI</option></select><button id="sendCustomerOrder" onclick="submitCustomerOrder()">Order അയയ്ക്കുക</button><p id="submitStatus" role="status" aria-live="polite"></p><button class="secondary" onclick="emptyCart()">തിരഞ്ഞെടുപ്പ് ഒഴിവാക്കുക</button></div><div class="card"><h2>UPI Payment</h2><div id="customerQR"></div><p>പണമടച്ച വിവരം Staff സ്ഥിരീകരിക്കണം.</p></div></section>
-<section id="appPage" class="hidden"><div class="card"><h2>Customer Orders</h2><p>പുതിയ ഓർഡറുകൾ ഇവിടെ വരും. പണം ലഭിച്ചശേഷം Accept അമർത്തുക.</p><p id="requestStatus" role="status"></p><div id="customerRequests"></div></div><p id="status" role="status" aria-live="polite"></p>
-<div class="card"><h2 id="welcome"></h2><button class="secondary" onclick="logout()">Logout</button></div>
-<div class="card"><h2>Stock / ലഭ്യത</h2><p>Stock തീർന്നവ Customer menu-ൽ കാണിക്കില്ല. വീണ്ടും ലഭ്യമാക്കാനും ഇവിടെ കഴിയും.</p><div id="stockList"></div></div>
-<div class="card"><h2>UPI Payment</h2><div id="staffQR"></div></div>
-<div id="staffPinPanel" class="card hidden"><h2>Staff PIN സജ്ജമാക്കുക / മാറ്റുക</h2><p>കുറഞ്ഞത് 6 അക്കങ്ങൾ. PIN ഇവിടെ സേവ് ചെയ്യുമ്പോൾ Staff-ന്റെ Firebase password ഇതായി മാറും.</p><input id="newPin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="പുതിയ PIN"><input id="repeatPin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="PIN വീണ്ടും"><button id="setPinButton" onclick="setStaffPin()">Save PIN</button><p id="pinResult" role="status"></p></div>
-<div class="card">
-<h2>🧾 New Order</h2>
-<select id="orderItem" onchange="showPhoto()"></select>
-<img id="itemPhoto" class="photo" hidden alt="Product">
-<input id="quantity" type="number" min="1" value="1" placeholder="Quantity">
-<select id="payment"><option value="Cash">Cash</option><option value="UPI">UPI</option></select>
-<button id="saveOrderButton" onclick="addOrder()">Save Order</button>
-</div>
-<div id="ownerPanel" class="hidden"><div class="card"><h2>UPI QR code ചേർക്കുക</h2><p>ഇപ്പോൾ ഒഴിവാക്കാം. പിന്നീട് നിങ്ങളുടെ കടയുടെ QR ചിത്രം ഇവിടെ അപ്‌ലോഡ് ചെയ്യാം.</p><input id="payeeName" placeholder="കട / അക്കൗണ്ട് പേര്" maxlength="100"><input id="upiId" placeholder="UPI ID (optional)" maxlength="150"><label for="qrFile">QR ചിത്രം (PNG/JPEG/WebP, 350 KB വരെ)</label><input id="qrFile" type="file" accept="image/png,image/jpeg,image/webp"><button id="qrSave" onclick="saveQR(false)">Save UPI details</button><button id="qrRemove" class="secondary" onclick="saveQR(true)">QR ഒഴിവാക്കുക</button><p>അപ്‌ലോഡ് ചെയ്ത ശേഷം സ്കാൻ ചെയ്ത് അക്കൗണ്ട് ശരിയാണെന്ന് പരിശോധിക്കുക.</p></div>
-<div class="card">
-<h2>📊 Business Dashboard</h2><div class="stat">Today Cash: ₹<b id="cashSales">0</b></div><div class="stat">Today UPI: ₹<b id="upiSales">0</b></div>
-<div class="stat">Today Sales: ₹<b id="sales">0</b></div>
-<div class="stat">Today Expenses: ₹<b id="expenses">0</b></div>
-<div class="stat">Today Balance: ₹<b id="profit">0</b></div>
-<div class="stat">Month Sales: ₹<b id="monthSales">0</b></div>
-<div class="stat">Month Expenses: ₹<b id="monthExpenses">0</b></div>
-<div class="stat">Month Balance: ₹<b id="monthProfit">0</b></div>
-<small>Balance = Sales - recorded expenses. ഇത് യഥാർത്ഥ Net Profit ആയിരിക്കണമെന്നില്ല.</small>
-</div>
-<div class="card"><h2>💸 Add Expense</h2><input id="expenseName" placeholder="Expense name"><input id="expenseAmount" type="number" min="0.01" step="0.01" placeholder="Amount ₹"><button id="expenseButton" onclick="addExpense()">Save Expense</button></div>
-<div class="card">
-<h2>☕ Products &amp; Prices</h2><button id="seedButton" class="secondary" onclick="seed()">ആദ്യമായി Tea / Coffee ചേർക്കുക</button><select id="menuChoice" onchange="editMenu()"></select>
-<input id="menuName" placeholder="Product name"><input id="menuPrice" type="number" min="0.01" step="0.01" placeholder="Price ₹">
-<label for="menuPhoto">Product Photo</label><input id="menuPhoto" type="file" accept="image/*">
-<button id="menuSaveButton" onclick="saveMenu()">Save Product</button><p id="menuMessage"></p>
-</div></div>
-<div class="card">
-<h2 id="ordersHeading">📋 Orders</h2><p id="ordersNote"></p>
-<div id="historyFilter" class="hidden"><label for="historyDate">തീയതി തിരഞ്ഞെടുക്കുക (ഒഴിഞ്ഞാൽ എല്ലാ ഓർഡറുകളും)</label><input id="historyDate" type="date" onchange="render()"><button class="secondary" onclick="el('historyDate').value='';render()">എല്ലാ ഓർഡറുകളും കാണുക</button></div>
-<div id="orderList"></div>
-</div>
-</section></main>
-<script>"use strict";
-const OWNER='fPc9PlKCqlhcRXoEviDzcdAwxv62', STAFF='dn7Iz07sVvTZK1VC7YqB4Dx3uBB2';
-const config={apiKey:'AIzaSyBTKnOdxDsCPabHOW42oERTej2MC2HVJlE',authDomain:'star-coffee-ca67a.firebaseapp.com',projectId:'star-coffee-ca67a',storageBucket:'star-coffee-ca67a.firebasestorage.app',messagingSenderId:'72631773224',appId:'1:72631773224:web:0d8f42d1746d63d79ded1d'};
-const el=id=>document.getElementById(id),money=n=>(Number(n||0)/100).toFixed(2);
-const day=()=>Math.floor((Date.now()+19800000)/86400000);
-const dateOf=d=>new Date(d*86400000).toISOString().slice(0,10);
-let cart={},paymentInfo={},customerMode=false;
-let auth,db,F,A,user=null,role='',products=[],orders=[],expenses=[],unsubs=[],orderSub=null,lastDay=day(),busy=false;
-const stamp=()=>F.serverTimestamp();
-function message(text){el('status').textContent=text;}
-function failure(e){message('സേവ്/ലോഡ് ചെയ്യാനായില്ല: '+(e.code||e.message)+'. Internet, Firebase Rules പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.');}
-let requestSub=null,customerRequests=[],sendingCustomer=false;
-function clear(){if(requestSub)requestSub();requestSub=null;customerRequests=[];el("customerRequests").replaceChildren();unsubs.forEach(f=>f());unsubs=[];if(orderSub)orderSub();orderSub=null;orders=[];expenses=[];role='';el('stockList').replaceChildren();el('newPin').value='';el('repeatPin').value='';el('pinResult').textContent='';el('orderList').replaceChildren();el('ownerPanel').classList.add('hidden');['sales','expenses','profit','monthSales','monthExpenses','monthProfit','cashSales','upiSales'].forEach(id=>el(id).textContent='');}
-async function login(){
- if(!auth||busy)return;busy=true;el('loginButton').disabled=true;el('loginError').textContent='';
- try{const staff=el('loginRole').value==='staff';if(staff && el('username').value.trim().toLowerCase()!=='pc star')throw Error('Staff username: pc star');await A.signInWithEmailAndPassword(auth,staff?'starcoffee.staff2026@gmail.com':el('username').value.trim(),el('pin').value);el('pin').value='';}
- catch(e){el('loginError').textContent='Login പരാജയപ്പെട്ടു: '+(e.code||e.message)+'. നൽകിയ login വിവരങ്ങൾ പരിശോധിക്കുക.';}
- finally{busy=false;el('loginButton').disabled=false;}
-}
-async function logout(){try{await A.signOut(auth);}catch(e){failure(e);}}
-function listenOrders(){
- if(orderSub)orderSub();orders=[];render();
- const ref=F.collection(db,'orders');const q=role==='owner'?ref:F.query(ref,F.where('day','==',day()));
- const uid=user.uid;
- orderSub=F.onSnapshot(q,{includeMetadataChanges:true},snapshot=>{
- if(user?.uid!==uid)return;
- orders=snapshot.docs.map(d=>({...d.data(),id:d.id,pending:d.metadata.hasPendingWrites}));render();
- message(snapshot.metadata.fromCache?'ബന്ധിപ്പിക്കുന്നു — കാണുന്നത് താൽക്കാലിക ഡാറ്റയാണ്.':'Cloud-ൽ നിന്ന് പുതുക്കി ✓');
- },e=>{orders=[];render();failure(e);});
-}
-function start(){
- const uid=user.uid;
- renderMenu();renderPayment();if(role==='owner'){el('payeeName').value=paymentInfo.payeeName||'';el('upiId').value=paymentInfo.upiId||'';}
- if(role==='owner')unsubs.push(F.onSnapshot(F.collection(db,'expenses'),snap=>{if(user?.uid!==uid)return;expenses=snap.docs.map(d=>({...d.data(),id:d.id}));render();},failure));
- listenOrders();listenCustomerRequests();
-}
-function renderMenu(){
- const available=products.filter(p=>p.available!==false);const old=el('orderItem').value,selected=el('menuChoice').value;
- el('orderItem').replaceChildren(...available.map(p=>new Option(p.name+' ₹'+money(p.pricePaise),p.id)));
- if(available.some(p=>p.id===old))el('orderItem').value=old;
- el('menuChoice').replaceChildren(new Option('Add New Product',''),...products.map(p=>new Option(p.name,p.id)));
- if(products.some(p=>p.id===selected))el('menuChoice').value=selected;
- el('saveOrderButton').disabled=!available.length;showPhoto();renderStock();renderCustomer();
-}
-function showPhoto(){const p=products.find(p=>p.id===el('orderItem').value),photo=el('itemPhoto');photo.hidden=!p?.photo;if(p?.photo)photo.src=p.photo;else photo.removeAttribute('src');}
-async function writeAction(button,fn){if(!user||button.disabled)return;button.disabled=true;message('Cloud-ൽ സേവ് ചെയ്യുന്നു…');try{await fn();message('Cloud-ൽ സേവ് ചെയ്തു ✓');}catch(e){failure(e);}finally{button.disabled=false;}}
-async function addOrder(){
- const p=products.find(p=>p.id===el('orderItem').value),qty=Number(el('quantity').value);
- if(!p||p.available===false||!Number.isInteger(qty)||qty<1||qty>10000){alert('സാധനവും ശരിയായ എണ്ണവും തിരഞ്ഞെടുക്കുക');return;}
- if(!navigator.onLine){message('Internet വന്ന ശേഷം Save Order അമർത്തുക.');return;}
- await writeAction(el('saveOrderButton'),async()=>{await F.addDoc(F.collection(db,'orders'),{day:day(),createdAt:stamp(),createdBy:user.uid,productId:p.id,item:p.name,qty,unitPaise:p.pricePaise,totalPaise:p.pricePaise*qty,payment:el('payment').value,cancelledAt:null,cancelledBy:null});el('quantity').value='1';});
-}
-async function cancelOrder(id,btn){
- const o=orders.find(o=>o.id===id);if(!o||o.cancelledAt||o.pending||!(role==='owner'||o.day===day()))return;
- if(!confirm(o.item+' × '+o.qty+' — ₹'+money(o.totalPaise)+'\nഓർഡർ റദ്ദാക്കണോ?'))return;
- if(!navigator.onLine){message('റദ്ദാക്കാൻ Internet വേണം.');return;}
- await writeAction(btn,async()=>F.runTransaction(db,async tx=>{const ref=F.doc(db,'orders',id),s=await tx.get(ref);if(!s.exists()||s.data().cancelledAt)return;tx.update(ref,{cancelledAt:stamp(),cancelledBy:user.uid});}));
-}
-async function addExpense(){const name=el('expenseName').value.trim(),amountPaise=Math.round(Number(el('expenseAmount').value)*100);if(role!=='owner'||!name||!Number.isSafeInteger(amountPaise)||amountPaise<=0){alert('ചെലവിന്റെ പേരും തുകയും നൽകുക');return;}await writeAction(el('expenseButton'),async()=>{await F.addDoc(F.collection(db,'expenses'),{day:day(),name,amountPaise,createdAt:stamp()});el('expenseName').value='';el('expenseAmount').value='';});}
-function editMenu(){const p=products.find(p=>p.id===el('menuChoice').value);el('menuName').value=p?.name||'';el('menuPrice').value=p?p.pricePaise/100:'';el('menuPhoto').value='';el('menuMessage').textContent='';}
-async function resizePhoto(file){const url=URL.createObjectURL(file);try{const img=new Image();img.src=url;await img.decode();const scale=Math.min(1,360/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.naturalWidth*scale));c.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);const result=c.toDataURL('image/jpeg',0.7);if(result.length>200000)throw Error('Photo too large');return result;}finally{URL.revokeObjectURL(url);}}
-async function saveMenu(){
- const name=el('menuName').value.trim(),pricePaise=Math.round(Number(el('menuPrice').value)*100),id=el('menuChoice').value,file=el('menuPhoto').files[0];
- if(role!=='owner'||!name||name.length>100||!Number.isSafeInteger(pricePaise)||pricePaise<=0||pricePaise>10000000){alert('ശരിയായ പേരും വിലയും നൽകുക');return;}
- await writeAction(el('menuSaveButton'),async()=>{let photo=products.find(p=>p.id===id)?.photo||'';if(file)photo=await resizePhoto(file);const ref=id?F.doc(db,'products',id):F.doc(F.collection(db,'products'));if(id){await F.updateDoc(ref,{name,pricePaise,photo});}else{await F.setDoc(ref,{name,pricePaise,photo,available:true});}el('menuMessage').textContent='Product Saved ✓';});
-}
-async function seed(){if(role!=='owner')return;await writeAction(el('seedButton'),async()=>{for(const [id,name,pricePaise] of [['tea','Tea',1200],['coffee','Coffee',2000],['black-coffee','Black Coffee',1500],['snacks','Snacks',2000]]){const ref=F.doc(db,'products',id);await F.runTransaction(db,async tx=>{const s=await tx.get(ref);if(!s.exists())tx.set(ref,{name,pricePaise,photo:'',available:true});});}});}
-function render(){
- if(!role)return;const owner=role==='owner',today=day(),month=dateOf(today).slice(0,7);
- el('staffPinPanel').classList.toggle('hidden',role!=='staff');el('ownerPanel').classList.toggle('hidden',!owner);el('historyFilter').classList.toggle('hidden',!owner);
- el('ordersHeading').textContent=owner?'📋 എല്ലാ ഓർഡറുകളും':'📋 ഇന്നത്തെ ഓർഡറുകൾ';
- el('ordersNote').textContent=owner?'റദ്ദാക്കിയവ വിൽപ്പനയിൽ കൂട്ടില്ല. സമയം: India.':'ഇന്ത്യൻ സമയം അർദ്ധരാത്രിക്ക് പഴയ ഓർഡറുകൾ ഈ ലിസ്റ്റിൽനിന്ന് മാറും.';
- const confirmed=orders.filter(o=>!o.pending&&!o.cancelledAt),sum=a=>a.reduce((s,o)=>s+Number(o.totalPaise||0),0);
- if(owner){const ds=sum(confirmed.filter(o=>o.day===today)),ms=sum(confirmed.filter(o=>Number.isFinite(o.day)&&dateOf(o.day).startsWith(month))),de=expenses.filter(e=>e.day===today).reduce((s,e)=>s+e.amountPaise,0),me=expenses.filter(e=>Number.isFinite(e.day)&&dateOf(e.day).startsWith(month)).reduce((s,e)=>s+e.amountPaise,0);
- [ds,de,ds-de,ms,me,ms-me,sum(confirmed.filter(o=>o.day===today&&o.payment==='Cash')),sum(confirmed.filter(o=>o.day===today&&o.payment==='UPI'))].forEach((v,i)=>el(['sales','expenses','profit','monthSales','monthExpenses','monthProfit','cashSales','upiSales'][i]).textContent=money(v));}
- const selected=el('historyDate').value;
- const shown=orders.filter(o=>Number.isFinite(o.day)&&(owner?(!selected||dateOf(o.day)===selected):o.day===today)).sort((a,b)=>(b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0));
- const list=el('orderList');list.replaceChildren();if(!shown.length){list.textContent='ഓർഡറുകളില്ല.';return;}
- for(const o of shown){const row=document.createElement('div');row.className='row';const t=document.createElement('div');t.textContent=dateOf(o.day)+' | '+o.item+' × '+o.qty+' | ₹'+money(o.totalPaise)+' | '+o.payment;row.append(t);
- if(owner){const by=document.createElement('small');by.textContent=' ചേർത്തത്: '+(o.createdBy===STAFF?'Staff':'Owner');row.append(by);}
- if(o.pending){const p=document.createElement('p');p.textContent='Cloud സ്ഥിരീകരണം കാത്തിരിക്കുന്നു…';row.append(p);}
- else if(o.cancelledAt){const p=document.createElement('p');p.className='error';p.textContent='റദ്ദാക്കി'+(owner?' — '+(o.cancelledBy===STAFF?'Staff':'Owner'):'');row.append(p);}
- else{const b=document.createElement('button');b.className='danger';b.textContent='ഓർഡർ റദ്ദാക്കുക / Cancel Order';b.onclick=()=>cancelOrder(o.id,b);row.append(b);}list.append(row);}
-}
-function chooseRole(){const staff=el('loginRole').value==='staff';el('passwordKeyboard').classList.toggle('hidden',!staff);el('username').type=staff?'text':'email';el('username').value=staff?'pc star':'';el('username').placeholder=staff?'Username':'Email';el('pin').value='';el('pin').placeholder=staff?'PIN / ആദ്യമായി നിലവിലുള്ള password':'Password';el('pin').inputMode=staff?'numeric':'text';el('loginHelp').textContent=staff?'Username: pc star. ആദ്യം നിലവിലുള്ള Staff password ഉപയോഗിച്ച് login ചെയ്യുക; തുടർന്ന് Staff PIN സജ്ജമാക്കാം. Password എഴുതാൻ keyboard-ൽ ABC തിരഞ്ഞെടുക്കുക.':'Owner: നിലവിലുള്ള email, password ഉപയോഗിക്കുക.';}
-async function setStaffPin(){if(role!=='staff'||auth.currentUser?.uid!==STAFF)return;const pin=el('newPin').value;const result=el('pinResult');if(!/^\d{6,30}$/.test(pin)||pin!==el('repeatPin').value){result.textContent='6–30 അക്കങ്ങളുള്ള PIN രണ്ടിടത്തും ഒരുപോലെ നൽകുക.';return;}el('setPinButton').disabled=true;try{const policy=await A.validatePassword(auth,pin);if(!policy.isValid)throw Error('Firebase password policy ഈ PIN അനുവദിക്കുന്നില്ല. നിലവിലുള്ള password മാറ്റിയിട്ടില്ല.');await A.updatePassword(auth.currentUser,pin);el('newPin').value='';el('repeatPin').value='';result.textContent='PIN മാറ്റി ✓ ഇനി pc star + പുതിയ PIN ഉപയോഗിക്കാം.';}catch(e){result.textContent=e.code==='auth/requires-recent-login'?'Logout ചെയ്ത് നിലവിലെ password/PIN ഉപയോഗിച്ച് വീണ്ടും login ചെയ്തശേഷം ശ്രമിക്കുക.':(e.code||e.message);}finally{el('setPinButton').disabled=false;}}
-function startPublic(){F.onSnapshot(F.collection(db,'products'),snap=>{products=snap.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>a.name.localeCompare(b.name));el('customerStatus').textContent='';renderMenu();},e=>{products=[];renderMenu();el('customerStatus').textContent='Menu ലഭ്യമല്ല. പുതിയ Firebase Rules Publish ചെയ്തിട്ടുണ്ടോ എന്ന് പരിശോധിക്കുക.';failure(e);});F.onSnapshot(F.doc(db,'settings','payment'),snap=>{paymentInfo=snap.exists()?snap.data():{};renderPayment();if(role==='owner'){el('payeeName').value=paymentInfo.payeeName||'';el('upiId').value=paymentInfo.upiId||'';}},e=>{paymentInfo={};renderPayment();failure(e);});}
-async function openCustomer(){if(user){await A.signOut(auth);}customerMode=true;el('loginPage').classList.add('hidden');el('appPage').classList.add('hidden');el('customerPage').classList.remove('hidden');renderCustomer();renderPayment();}
-function closeCustomer(){customerMode=false;el('customerPage').classList.add('hidden');el('loginPage').classList.remove('hidden');}
-function node(tag,text){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;}
-function renderStock(){const list=el('stockList');list.replaceChildren();if(!user)return;for(const p of products){const row=node('div');row.className='row';row.append(node('b',p.name+' — '+(p.available===false?'Stock തീർന്നു':'ലഭ്യമാണ്')));const b=node('button',p.available===false?'വീണ്ടും ലഭ്യമാക്കുക':'Stock തീർന്നു — Menu-ൽ മറയ്ക്കുക');b.className=p.available===false?'secondary':'danger';b.onclick=()=>toggleStock(p.id,p.available===false,b);row.append(b);list.append(row);}if(!products.length)list.textContent='Owner സാധനങ്ങൾ ചേർത്താൽ ഇവിടെ കാണാം.';}
-async function toggleStock(id,available,button){if(!['owner','staff'].includes(role))return;await writeAction(button,()=>F.updateDoc(F.doc(db,'products',id),{available}));}
-function changeCart(id,delta){if(delta>0&&!cart[id]&&Object.keys(cart).length>=5){el("customerStatus").textContent="ഒരു ഓർഡറിൽ 5 വ്യത്യസ്ത സാധനങ്ങൾ വരെ.";return;}const p=products.find(p=>p.id===id&&p.available!==false);if(!p)return;cart[id]=Math.max(0,Math.min(99,(cart[id]||0)+delta));if(!cart[id])delete cart[id];renderCustomer();}
-function emptyCart(){cart={};renderCustomer();}
-function renderCustomer(){const menu=el('customerMenu'),list=el('cartList');menu.replaceChildren();list.replaceChildren();const available=products.filter(p=>p.available!==false);for(const id of Object.keys(cart)){if(!available.some(p=>p.id===id)){delete cart[id];el('customerStatus').textContent='Stock തീർന്ന സാധനം തിരഞ്ഞെടുപ്പിൽനിന്ന് ഒഴിവാക്കി.';}}let total=0;for(const p of available){const row=node('div');row.className='row';if(p.photo){const img=node('img');img.src=p.photo;img.alt=p.name;img.className='photo';row.append(img);}row.append(node('h3',p.name+' — ₹'+money(p.pricePaise)));const add=node('button',cart[p.id]?'കൂടുതൽ + ('+cart[p.id]+')':'തിരഞ്ഞെടുക്കുക +');add.onclick=()=>changeCart(p.id,1);row.append(add);menu.append(row);if(cart[p.id]){const c=node('div');c.className='row';c.append(node('span',p.name+' × '+cart[p.id]+' = ₹'+money(p.pricePaise*cart[p.id])));const less=node('button','ഒന്ന് കുറയ്ക്കുക −');less.className='secondary';less.onclick=()=>changeCart(p.id,-1);c.append(less);list.append(c);total+=p.pricePaise*cart[p.id];}}if(!available.length)menu.textContent='ഇപ്പോൾ ലഭ്യമായ സാധനങ്ങളില്ല.';if(!total)list.textContent='Menu-ൽ നിന്ന് സാധനങ്ങൾ തിരഞ്ഞെടുക്കുക.';el('cartTotal').textContent=money(total);}
-function renderPayment(){for(const id of ['customerQR','staffQR']){const box=el(id);box.replaceChildren();if(!paymentInfo.qrImage){box.textContent='QR code പിന്നീട് ചേർക്കും. Cash / Staff-നോട് ചോദിക്കുക.';continue;}const img=node('img');img.src=paymentInfo.qrImage;img.alt='Shop UPI QR code';img.style.cssText='display:block;width:100%;max-width:320px;height:auto;background:white;margin:auto';box.append(img,node('p',paymentInfo.payeeName||''),node('p',paymentInfo.upiId||''));}}
-async function saveQR(remove){if(role!=='owner')return;if(remove&&!confirm('UPI QR ചിത്രം ഒഴിവാക്കണോ?'))return;await writeAction(el(remove?'qrRemove':'qrSave'),async()=>{let qrImage=remove?'':paymentInfo.qrImage||'';const file=el('qrFile').files[0];if(file&&!remove){if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>350000)throw Error('PNG/JPEG/WebP ചിത്രം 350 KB-ൽ താഴെ തിരഞ്ഞെടുക്കുക.');qrImage=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(Error('QR ചിത്രം വായിക്കാനായില്ല'));r.readAsDataURL(file);});}const details={qrImage,payeeName:el('payeeName').value.trim(),upiId:el('upiId').value.trim()};await F.setDoc(F.doc(db,'settings','payment'),details);paymentInfo=details;el('qrFile').value='';renderPayment();});}
+/* STAR COFFEE: OWNER REPORTS */
+(() => {
+  const report = {
+    orders: [],
+    expenses: [],
+    costs: [],
+    ready: {},
+    errors: {},
+    cached: {},
+    session: 0
+  };
 
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = 'ownerReports';
+  card.innerHTML = `
+    <h2>📊 Sales & Profit Report</h2>
 
-function customerPayload(){
- const label=el('customerLabel').value.trim();if(!label||label.length>60)throw Error('പേര് / Table നമ്പർ നൽകുക.');
- const items=Object.entries(cart).map(([id,qty])=>{const p=products.find(p=>p.id===id&&p.available!==false);if(!p||!Number.isInteger(qty)||qty<1||qty>99)throw Error('Menu പുതുക്കി വീണ്ടും തിരഞ്ഞെടുക്കുക.');return {productId:id,item:p.name,qty,unitPaise:p.pricePaise,totalPaise:p.pricePaise*qty};});
- if(!items.length||items.length>5)throw Error('1 മുതൽ 5 വരെ വ്യത്യസ്ത സാധനങ്ങൾ തിരഞ്ഞെടുക്കുക.');
- return {day:day(),createdAt:stamp(),customerLabel:label,items,totalPaise:items.reduce((n,i)=>n+i.totalPaise,0),payment:el('customerPayment').value,status:'pending',handledAt:null,handledBy:null};
-}
-async function submitCustomerOrder(){
- if(sendingCustomer)return;const out=el('submitStatus'),btn=el('sendCustomerOrder');
- try{
- if(!navigator.onLine)throw Error('Internet വന്നശേഷം അയയ്ക്കുക.');
- const prior=sessionStorage.getItem('starPendingRequest');
- if(prior){out.textContent='മുൻ ഓർഡർ നമ്പർ: '+prior+'. Staff-നോട് എത്തിയോ എന്ന് പരിശോധിക്കുക.';if(!confirm('മുൻ ഓർഡർ Staff-നോട് പരിശോധിച്ചോ? പുതിയ ഓർഡർ അയയ്ക്കണോ?'))return;sessionStorage.removeItem('starPendingRequest');}
- const payload=customerPayload(),ref=F.doc(F.collection(db,'customerRequests'));
- sessionStorage.setItem('starPendingRequest',ref.id);sendingCustomer=true;btn.disabled=true;
- out.textContent='അയയ്ക്കുന്നു… നമ്പർ: '+ref.id+' — വീണ്ടും അയയ്ക്കരുത്.';
- await F.setDoc(ref,payload);
- out.textContent='ഓർഡർ അയച്ചു ✓ നമ്പർ: '+ref.id+'. Owner / Staff സ്വീകരിക്കുന്നതുവരെ കാത്തിരിക്കുക. സ്ഥിരീകരണം Staff-നോട് ചോദിക്കുക.';
- cart={};renderCustomer();
- }catch(e){if(e.code==='permission-denied')sessionStorage.removeItem('starPendingRequest');out.textContent='അയച്ചതായി സ്ഥിരീകരിച്ചിട്ടില്ല. '+(e.code||e.message)+' — നമ്പർ കാണുന്നുണ്ടെങ്കിൽ Staff-നോട് പരിശോധിക്കുക.';}
- finally{sendingCustomer=false;btn.disabled=false;}
-}
-function listenCustomerRequests(){
- if(requestSub)requestSub();const uid=user?.uid;if(!uid)return;
- const collection=F.collection(db,'customerRequests');const q=role==='owner'?collection:F.query(collection,F.where('day','==',day()));
- el('requestStatus').textContent='Customer orders ലോഡ് ചെയ്യുന്നു…';
- requestSub=F.onSnapshot(q,{includeMetadataChanges:true},snap=>{if(user?.uid!==uid)return;customerRequests=snap.docs.map(d=>({...d.data(),id:d.id,pending:d.metadata.hasPendingWrites}));renderCustomerRequests();el('requestStatus').textContent=snap.metadata.fromCache?'Cloud connection പരിശോധിക്കുന്നു…':'Customer orders live ✓';},e=>{customerRequests=[];renderCustomerRequests();el('requestStatus').textContent='Customer orders ലഭ്യമല്ല: '+(e.code||e.message)+'. പുതിയ firestore.txt Rules Publish ചെയ്യുക.';});
-}
-function renderCustomerRequests(){
- const box=el('customerRequests');box.replaceChildren();
- const sorted=[...customerRequests].sort((a,b)=>(a.status==='pending'?0:1)-(b.status==='pending'?0:1)||(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
- if(!sorted.length){box.textContent='Customer ഓർഡറുകൾ ഇതുവരെ വന്നിട്ടില്ല.';return;}
- for(const r of sorted){const row=node('div');row.className='row';row.append(node('h3',r.customerLabel+' — ₹'+money(r.totalPaise)),node('small','Order: '+r.id));for(const i of r.items||[])row.append(node('p',i.item+' × '+i.qty));row.append(node('p',r.payment+' · '+({pending:'സ്വീകരിക്കാൻ ബാക്കി',accepted:'സ്വീകരിച്ചു ✓',rejected:'Cancel ചെയ്തു'}[r.status]||r.status)));
- if(r.status==='pending'&&!r.pending){const yes=node('button','Accept / Payment സ്ഥിരീകരിക്കുക');yes.onclick=()=>handleCustomerRequest(r.id,true,yes);const no=node('button','Cancel');no.className='secondary';no.onclick=()=>handleCustomerRequest(r.id,false,no);row.append(yes,no);}box.append(row);}
-}
-async function processCustomerRequest(id,accept){
- if(!user||!['owner','staff'].includes(role))throw Error('Login ചെയ്യുക.');
- const uid=user.uid;return F.runTransaction(db,async tx=>{
- const ref=F.doc(db,'customerRequests',id),snap=await tx.get(ref);if(!snap.exists()||snap.data().status!=='pending')throw Error('ഈ ഓർഡർ ഇതിനകം കൈകാര്യം ചെയ്തിട്ടുണ്ട്.');
- const r=snap.data();if(role==='staff'&&r.day!==day())throw Error('പഴയ ഓർഡർ Owner കൈകാര്യം ചെയ്യണം.');
- if(accept){const checks=[];for(const i of r.items)checks.push(await tx.get(F.doc(db,'products',i.productId)));
- checks.forEach((p,n)=>{const i=r.items[n];if(!p.exists()||p.data().available===false||p.data().pricePaise!==i.unitPaise||p.data().name!==i.item)throw Error('Stock / വില മാറി. ഈ request Cancel ചെയ്ത് പുതിയ order എടുക്കുക.');});
- r.items.forEach((i,n)=>tx.set(F.doc(db,'orders','customer_'+id+'_'+n),{...i,day:day(),createdAt:stamp(),createdBy:uid,payment:r.payment,cancelledAt:null,cancelledBy:null}));}
- tx.update(ref,{status:accept?'accepted':'rejected',handledAt:stamp(),handledBy:uid});
- });
-}
-async function handleCustomerRequest(id,accept,button){
- if(!navigator.onLine){el('requestStatus').textContent='Internet ആവശ്യമാണ്.';return;}
- if(!confirm(accept?'പണം ലഭിച്ചെന്ന് പരിശോധിച്ചോ? സ്വീകരിച്ച് sales-ൽ ചേർക്കണോ?':'Customer order Cancel ചെയ്യണോ?'))return;
- button.disabled=true;try{await processCustomerRequest(id,accept);el('requestStatus').textContent=accept?'സ്വീകരിച്ചു; sales-ൽ ചേർത്തു ✓':'Cancel ചെയ്തു.';}catch(e){el('requestStatus').textContent=e.code||e.message;}finally{button.disabled=false;}
-}
+    <label for="reportPeriod">റിപ്പോർട്ട്</label>
+    <select id="reportPeriod">
+      <option value="daily">Daily / ദിവസം</option>
+      <option value="weekly">Weekly / ആഴ്ച</option>
+      <option value="monthly">Monthly / മാസം</option>
+    </select>
 
-function refreshDay(){if(lastDay!==day()){lastDay=day();if(user){orders=[];render();listenOrders();listenCustomerRequests();}}}
-Object.assign(window,{el,login,logout,showPhoto,addOrder,addExpense,editMenu,saveMenu,render,seed});
-setInterval(refreshDay,1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDay();});window.addEventListener('focus',refreshDay);
-window.addEventListener('offline',()=>message('Internet ഇല്ല. Cloud സ്ഥിരീകരണം വരുന്നതുവരെ ഓർഡർ വീണ്ടും ചേർക്കരുത്.'));
-(async()=>{try{
- const base='https://www.gstatic.com/firebasejs/13.3.0/';const App=await import(base+'firebase-app.js');A=await import(base+'firebase-auth.js');F=await import(base+'firebase-firestore.js');
- const app=App.initializeApp(config);auth=A.getAuth(app);db=F.getFirestore(app);
- await A.setPersistence(auth,A.browserSessionPersistence);
- A.onAuthStateChanged(auth,async u=>{clear();user=u;el('customerPage').classList.add('hidden');customerMode=false;
- if(!u){el('appPage').classList.add('hidden');el('loginPage').classList.remove('hidden');return;}
- role=u.uid===OWNER?'owner':u.uid===STAFF?'staff':'';
- if(!role){await A.signOut(auth);el('loginError').textContent='ഈ അക്കൗണ്ടിന് അനുമതിയില്ല.';return;}
- el('welcome').textContent=role==='owner'?'Owner Dashboard':'Staff Dashboard';el('historyDate').value='';el('loginPage').classList.add('hidden');el('appPage').classList.remove('hidden');lastDay=day();render();start();
- });startPublic();el('customerButton').disabled=false;el('loginButton').disabled=false;el('loginError').textContent='';
- }catch(e){el('loginError').textContent='Firebase ലോഡ് ആയില്ല. Internet പരിശോധിച്ച് Refresh ചെയ്യുക. '+(e.code||e.message);}})();
-</script>
-</body></html>
+    <label for="reportDate">തീയതി തിരഞ്ഞെടുക്കുക</label>
+    <input id="reportDate" type="date">
+    <button id="reportToday" class="secondary">ഇന്ന്</button>
+
+    <p>ഇന്ത്യൻ സമയം. ആഴ്ച: തിങ്കൾ മുതൽ ഞായർ വരെ.</p>
+    <p id="reportState" role="status"></p>
+    <div id="reportSummary"></div>
+
+    <h3>Item-wise Sales</h3>
+    <div id="reportItems"></div>
+
+    <h3>ചെലവുകളുടെ വിശദാംശങ്ങൾ</h3>
+    <div id="reportExpenseList"></div>
+
+    <hr>
+    <h3>Item Cost — Owner മാത്രം</h3>
+    <p>
+      ഒരു സാധനം തയ്യാറാക്കാനുള്ള ചേരുവകളും പാക്കിങ്ങും ഉൾപ്പെടുന്ന
+      ചെലവ് നൽകുക. ഇതിൽ ഉൾപ്പെടുത്തിയ ചെലവ് Add Expense-ൽ
+      വീണ്ടും ചേർത്താൽ രണ്ടുതവണ കുറയും.
+    </p>
+
+    <label for="costProduct">സാധനം</label>
+    <select id="costProduct"></select>
+
+    <label for="costAmount">ഒന്നിന്റെ ചെലവ് ₹</label>
+    <input id="costAmount" type="number" min="0"
+      max="100000" step="0.01" placeholder="ഉദാ: 8.50">
+
+    <label for="costFrom">ഈ ചെലവ് ബാധകമാകുന്ന തീയതി</label>
+    <input id="costFrom" type="date">
+
+    <p>
+      തിരഞ്ഞെടുത്ത ദിവസം മുതൽ അടുത്ത cost മാറ്റത്തിന്റെ ദിവസം വരെ
+      ഈ നിരക്ക് ഉപയോഗിക്കും. പഴയ തീയതി നൽകിയാൽ ആ കാലയളവിലെ
+      റിപ്പോർട്ടും മാറും. ഒരേ തീയതിയിൽ വീണ്ടും സേവ് ചെയ്താൽ
+      ഏറ്റവും അവസാനം സേവ് ചെയ്ത നിരക്കാണ് ഉപയോഗിക്കുക.
+    </p>
+
+    <button id="saveItemCost">Save Item Cost</button>
+    <p id="costResult" role="status"></p>
+    <div id="costHistory"></div>
+
+    <p>
+      Net Profit = Sales − വിറ്റ സാധനങ്ങളുടെ cost − രേഖപ്പെടുത്തിയ
+      മറ്റു ചെലവുകൾ. എല്ലാ ചെലവുകളും നൽകിയാൽ മാത്രമേ കണക്ക്
+      പൂർണ്ണമാകൂ. Cost ലഭ്യമല്ലാത്ത orders ഉണ്ടെങ്കിൽ Net Profit
+      കാണിക്കില്ല.
+    </p>
+  `;
+  el('ownerPanel').prepend(card);
+
+  const parseDay = value => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return NaN;
+    const result = Date.parse(value + 'T00:00:00Z') / 86400000;
+    return Number.isInteger(result) && dateOf(result) === value
+      ? result : NaN;
+  };
+
+  function resetReport() {
+    report.session++;
+    report.orders = [];
+    report.expenses = [];
+    report.costs = [];
+    report.ready = {};
+    report.errors = {};
+    report.cached = {};
+
+    [
+      'reportState', 'reportSummary', 'reportItems',
+      'reportExpenseList', 'costHistory', 'costResult'
+    ].forEach(id => el(id).replaceChildren());
+
+    el('costProduct').replaceChildren();
+    el('costAmount').value = '';
+  }
+
+  const originalClear = clear;
+  clear = function () {
+    resetReport();
+    originalClear();
+  };
+
+  function updateCostProducts() {
+    const select = el('costProduct');
+    const previous = select.value;
+    select.replaceChildren();
+    if (role !== 'owner') return;
+
+    select.append(new Option('സാധനം തിരഞ്ഞെടുക്കുക', ''));
+    products.forEach(p => select.append(new Option(p.name, p.id)));
+    if (products.some(p => p.id === previous)) select.value = previous;
+  }
+
+  const originalRenderMenu = renderMenu;
+  renderMenu = function () {
+    originalRenderMenu();
+    updateCostProducts();
+    drawReport();
+  };
+
+  function subscribeReport(key, collectionName, session) {
+    const uid = user.uid;
+    const stop = F.onSnapshot(
+      F.collection(db, collectionName),
+      { includeMetadataChanges: true },
+      snapshot => {
+        if (
+          session !== report.session ||
+          role !== 'owner' ||
+          user?.uid !== uid
+        ) return;
+
+        report[key] = snapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id,
+          pending: doc.metadata.hasPendingWrites
+        }));
+        report.ready[key] = true;
+        report.cached[key] = snapshot.metadata.fromCache;
+        delete report.errors[key];
+        drawReport();
+      },
+      error => {
+        if (
+          session !== report.session ||
+          role !== 'owner' ||
+          user?.uid !== uid
+        ) return;
+
+        report[key] = [];
+        report.ready[key] = false;
+        report.errors[key] = error.code || error.message;
+        drawReport();
+      }
+    );
+    unsubs.push(stop);
+  }
+
+  const originalStart = start;
+  start = function () {
+    originalStart();
+    if (role !== 'owner') return;
+
+    el('reportDate').value = dateOf(day());
+    el('costFrom').value = dateOf(day());
+    el('costFrom').max = dateOf(day());
+    updateCostProducts();
+
+    const session = report.session;
+    subscribeReport('orders', 'orders', session);
+    subscribeReport('expenses', 'expenses', session);
+    subscribeReport('costs', 'itemCosts', session);
+  };
+
+  function range() {
+    const selected = parseDay(el('reportDate').value);
+    if (!Number.isInteger(selected)) return null;
+
+    const period = el('reportPeriod').value;
+    if (period === 'weekly') {
+      const startDay = selected - ((selected + 3) % 7);
+      return [startDay, startDay + 7];
+    }
+
+    if (period === 'monthly') {
+      const date = new Date(selected * 86400000);
+      const year = date.getUTCFullYear();
+      const month = date.getUTCMonth();
+      return [
+        Date.UTC(year, month, 1) / 86400000,
+        Date.UTC(year, month + 1, 1) / 86400000
+      ];
+    }
+
+    return [selected, selected + 1];
+  }
+
+  function orderedCosts() {
+    return report.costs.filter(c => !c.pending).sort((a, b) =>
+      b.effectiveDay - a.effectiveDay ||
+      (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0) ||
+      (b.createdAt?.nanoseconds || 0) -
+        (a.createdAt?.nanoseconds || 0) ||
+      b.id.localeCompare(a.id)
+    );
+  }
+
+  function costFor(order, costs) {
+    const found = costs.find(c =>
+      c.productId === order.productId &&
+      c.effectiveDay <= order.day
+    );
+    return found ? found.unitCostPaise : null;
+  }
+
+  // A customer basket creates several order documents.
+  // Count that basket once, even when it contains several items.
+  function orderKey(order) {
+    const match = /^customer_(.+)_\d+$/.exec(order.id);
+    return match ? 'customer:' + match[1] : 'manual:' + order.id;
+  }
+
+  function addStat(label, value) {
+    const line = node('div');
+    line.className = 'stat';
+    line.append(node('span', label + ': '), node('b', value));
+    el('reportSummary').append(line);
+  }
+
+  function drawCostHistory(costs) {
+    const box = el('costHistory');
+    box.replaceChildren();
+
+    const productId = el('costProduct').value;
+    if (!productId) return;
+
+    const history = costs.filter(c => c.productId === productId);
+    if (!history.length) {
+      box.textContent = 'ഈ സാധനത്തിന് cost നൽകിയിട്ടില്ല.';
+      return;
+    }
+
+    history.forEach(c => {
+      const row = node(
+        'p',
+        dateOf(c.effectiveDay) + ' മുതൽ — ഒന്നിന് ₹' +
+        money(c.unitCostPaise)
+      );
+      box.append(row);
+    });
+  }
+
+  function drawReport() {
+    if (role !== 'owner') return;
+
+    [
+      'reportSummary', 'reportItems',
+      'reportExpenseList', 'costHistory'
+    ].forEach(id => el(id).replaceChildren());
+
+    const errors = Object.entries(report.errors);
+    if (errors.length) {
+      el('reportState').textContent =
+        'റിപ്പോർട്ട് ലഭ്യമല്ല: ' +
+        errors.map(([key, error]) => key + ': ' + error).join(', ') +
+        '. Rules Publish ചെയ്തശേഷം Logout / Login ചെയ്യുക.';
+      return;
+    }
+
+    if (!['orders', 'expenses', 'costs'].every(k => report.ready[k])) {
+      el('reportState').textContent = 'റിപ്പോർട്ട് ലോഡ് ചെയ്യുന്നു…';
+      return;
+    }
+
+    const selectedRange = range();
+    if (!selectedRange) {
+      el('reportState').textContent = 'ശരിയായ തീയതി തിരഞ്ഞെടുക്കുക.';
+      return;
+    }
+
+    const [from, until] = selectedRange;
+    const inRange = row =>
+      Number.isInteger(row.day) && row.day >= from && row.day < until;
+
+    const sales = report.orders.filter(o =>
+      inRange(o) && !o.pending && !o.cancelledAt
+    );
+    const expenseRows = report.expenses.filter(e =>
+      inRange(e) && !e.pending
+    );
+    const costs = orderedCosts();
+
+    const pending =
+      report.orders.filter(o => inRange(o) && o.pending).length +
+      report.expenses.filter(e => inRange(e) && e.pending).length +
+      report.costs.filter(c => c.pending).length;
+
+    const cached = Object.values(report.cached).some(Boolean);
+    el('reportState').textContent =
+      dateOf(from) + ' → ' + dateOf(until - 1) +
+      (cached ? ' · താൽക്കാലിക/offline ഡാറ്റ' : ' · Cloud ഡാറ്റ ✓') +
+      (pending ? ' · ' + pending + ' മാറ്റങ്ങൾ സ്ഥിരീകരിക്കാൻ ബാക്കി' : '');
+
+    let totalSales = 0;
+    let totalCost = 0;
+    let totalQty = 0;
+    let missingLines = 0;
+    const groups = new Map();
+
+    for (const order of sales) {
+      totalSales += order.totalPaise;
+      totalQty += order.qty;
+
+      const unitCost = costFor(order, costs);
+      const known = unitCost !== null;
+      const lineCost = known ? unitCost * order.qty : 0;
+      if (known) totalCost += lineCost;
+      else missingLines++;
+
+      const key = order.productId || order.item;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          name: order.item,
+          qty: 0,
+          sales: 0,
+          cost: 0,
+          missing: false,
+          orders: new Set()
+        });
+      }
+
+      const group = groups.get(key);
+      group.qty += order.qty;
+      group.sales += order.totalPaise;
+      group.cost += lineCost;
+      group.missing = group.missing || !known;
+      group.orders.add(orderKey(order));
+    }
+
+    const totalExpenses = expenseRows.reduce(
+      (sum, row) => sum + row.amountPaise, 0
+    );
+    const orderCount = new Set(sales.map(orderKey)).size;
+    const paymentTotal = method => sales
+      .filter(o => o.payment === method)
+      .reduce((sum, o) => sum + o.totalPaise, 0);
+
+    addStat('Sales', '₹' + money(totalSales));
+    addStat('Orders', String(orderCount));
+    addStat('വിറ്റ സാധനങ്ങളുടെ എണ്ണം', String(totalQty));
+    addStat('Cash', '₹' + money(paymentTotal('Cash')));
+    addStat('UPI', '₹' + money(paymentTotal('UPI')));
+    addStat(
+      missingLines ? 'ലഭ്യമായ item cost മാത്രം' : 'വിറ്റ സാധനങ്ങളുടെ cost',
+      '₹' + money(totalCost)
+    );
+    addStat('മറ്റ് Expenses', '₹' + money(totalExpenses));
+    addStat(
+      'Net Profit',
+      missingLines
+        ? 'Cost അപൂർണ്ണം — കണക്കാക്കാനാവില്ല'
+        : '₹' + money(totalSales - totalCost - totalExpenses)
+    );
+
+    if (missingLines) {
+      el('reportSummary').append(node(
+        'p',
+        missingLines + ' order വരികൾക്ക് cost ലഭ്യമല്ല. ' +
+        'ശരിയായ തീയതി നൽകി item cost ചേർക്കുക.'
+      ));
+    }
+
+    el('reportSummary').append(node(
+      'small',
+      'റദ്ദാക്കിയവ ഒഴിവാക്കിയിട്ടുണ്ട്. Customer basket ഒറ്റ order ആണ്. ' +
+      'New Order-ൽ ഓരോ Save-ഉം ഓരോ order ആണ്.'
+    ));
+
+    const itemsBox = el('reportItems');
+    if (!groups.size) itemsBox.textContent = 'ഈ കാലയളവിൽ sales ഇല്ല.';
+
+    [...groups.values()]
+      .sort((a, b) => b.sales - a.sales)
+      .forEach(group => {
+        const row = node('div');
+        row.className = 'row';
+        row.append(
+          node('b', group.name),
+          node('p', 'എണ്ണം: ' + group.qty +
+            ' · Orders: ' + group.orders.size),
+          node('p', 'Sales: ₹' + money(group.sales)),
+          node('p', group.missing
+            ? 'Item cost: അപൂർണ്ണം'
+            : 'Item cost: ₹' + money(group.cost)),
+          node('p', group.missing
+            ? 'മറ്റ് ചെലവുകൾക്ക് മുൻപുള്ള ലാഭം: ലഭ്യമല്ല'
+            : 'മറ്റ് ചെലവുകൾക്ക് മുൻപുള്ള ലാഭം: ₹' +
+              money(group.sales - group.cost))
+        );
+        itemsBox.append(row);
+      });
+
+    const expenseBox = el('reportExpenseList');
+    if (!expenseRows.length) {
+      expenseBox.textContent = 'ഈ കാലയളവിൽ ചെലവുകൾ രേഖപ്പെടുത്തിയിട്ടില്ല.';
+    }
+    expenseRows.sort((a, b) => b.day - a.day).forEach(expense => {
+      const row = node(
+        'div',
+        dateOf(expense.day) + ' · ' + expense.name +
+        ' — ₹' + money(expense.amountPaise)
+      );
+      row.className = 'row';
+      expenseBox.append(row);
+    });
+
+    drawCostHistory(costs);
+  }
+
+  el('saveItemCost').onclick = async () => {
+    if (role !== 'owner' || user?.uid !== OWNER) return;
+
+    const productId = el('costProduct').value;
+    const rawAmount = el('costAmount').value.trim();
+    const unitCostPaise = Math.round(Number(rawAmount) * 100);
+    const effectiveDay = parseDay(el('costFrom').value);
+    const result = el('costResult');
+
+    if (
+      !products.some(p => p.id === productId) ||
+      !/^\d+(\.\d{1,2})?$/.test(rawAmount) ||
+      !Number.isSafeInteger(unitCostPaise) ||
+      unitCostPaise < 0 || unitCostPaise > 10000000 ||
+      !Number.isInteger(effectiveDay) ||
+      effectiveDay < 0 || effectiveDay > day()
+    ) {
+      result.textContent =
+        'സാധനം, ശരിയായ ചെലവ്, ഇന്നോ അതിന് മുൻപോ ഉള്ള തീയതി നൽകുക.';
+      return;
+    }
+
+    if (!navigator.onLine) {
+      result.textContent = 'Cost സേവ് ചെയ്യാൻ Internet വേണം.';
+      return;
+    }
+
+    if (!confirm(
+      dateOf(effectiveDay) + ' മുതൽ ഒന്നിന് ₹' +
+      money(unitCostPaise) + ' ഉപയോഗിക്കണോ?\n' +
+      'ഈ തീയതി മുതൽ ബന്ധപ്പെട്ട റിപ്പോർട്ടുകൾ മാറും.'
+    )) return;
+
+    const button = el('saveItemCost');
+    const session = report.session;
+    button.disabled = true;
+    result.textContent = 'സേവ് ചെയ്യുന്നു…';
+
+    try {
+      await F.addDoc(F.collection(db, 'itemCosts'), {
+        productId,
+        unitCostPaise,
+        effectiveDay,
+        createdAt: stamp()
+      });
+      if (session === report.session && role === 'owner') {
+        result.textContent = 'Item cost സേവ് ചെയ്തു ✓';
+        el('costAmount').value = '';
+      }
+    } catch (error) {
+      if (session === report.session && role === 'owner') {
+        result.textContent =
+          'സേവ് ആയില്ല: ' + (error.code || error.message);
+      }
+    } finally {
+      button.disabled = false;
+    }
+  };
+
+  el('reportPeriod').onchange = drawReport;
+  el('reportDate').onchange = drawReport;
+  el('costProduct').onchange = () => {
+    el('costAmount').value = '';
+    el('costResult').textContent = '';
+    drawReport();
+  };
+  el('reportToday').onclick = () => {
+    el('reportDate').value = dateOf(day
